@@ -1,0 +1,68 @@
+{
+  "name": "three-gates-journal",
+  "productName": "3 Gates Trade Journal",
+  "version": "1.1.0",
+  "description": "Futures trade journal",
+  "author": "3 Gates Capital",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never",
+    "release": "electron-builder --win --publish always"
+  },
+  "build": {
+    "appId": "com.threegates.journal",
+    "productName": "3 Gates Trade Journal",
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "3 Gates Trade Journal",
+      "artifactName": "3-Gates-Trade-Journal-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "runAfterFinish": true
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "cozyboyclean",
+        "repo": "3gates-journal",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "44.0.0",
+    "electron-builder": "26.0.12"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cozyboyclean/3gates-journal.git"
+  }
+}

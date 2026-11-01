@@ -1,0 +1,2 @@
+- The app now updates itself. When a new version is ready you'll see "Restart now / Later".
+- Help → Check for updates, and Help → About (shows your version and where your data is saved).

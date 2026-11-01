@@ -17,6 +17,6 @@ Download `3-Gates-Trade-Journal-Setup-x.y.z.exe` from the latest [release](../..
 
 ## Releasing an update
 
-1. Make the change and bump `version` in `package.json`.
-2. Commit, then tag and push: `git tag v1.2.0 && git push origin main --tags`.
-3. GitHub Actions builds the Windows installer and publishes the release. Installed apps pick it up on next launch or within 4 hours.
+1. Make the change, bump `version` in `package.json`, and write user-facing notes in `release-notes.md`.
+2. Commit and push to `main`.
+3. GitHub Actions sees the new version, builds the Windows installer and publishes release `vX.Y.Z`. Installed apps pick it up on next launch or within 4 hours.

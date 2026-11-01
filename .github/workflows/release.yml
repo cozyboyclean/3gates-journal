@@ -1,8 +1,12 @@
 name: Build and release
 
+# Runs when package.json changes on main. If no release exists yet for the
+# version in package.json, it builds the Windows installer and publishes
+# release vX.Y.Z (electron-builder creates the tag). Installed apps update from it.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths: ['package.json']
   workflow_dispatch:
 
 permissions:
@@ -13,12 +17,30 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check whether this version is already released
+        id: ver
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          if gh release view "v$V" >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT"; echo "v$V already released, skipping"; else echo "exists=false" >> "$GITHUB_OUTPUT"; fi
       - uses: actions/setup-node@v4
+        if: steps.ver.outputs.exists == 'false'
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+        if: steps.ver.outputs.exists == 'false'
       - name: Build installer and publish GitHub release
+        if: steps.ver.outputs.exists == 'false'
         run: npx electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Add release notes
+        if: steps.ver.outputs.exists == 'false' && hashFiles('release-notes.md') != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${{ steps.ver.outputs.version }}" --notes-file release-notes.md

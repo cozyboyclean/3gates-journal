@@ -1,5 +1,10 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme, protocol } = require('electron');
+const { Readable } = require('stream');
+const crypto = require('crypto');
+
+// Screenshots and clips live as files in <data folder>/media and are served to the page via journal-media://m/<file>
+protocol.registerSchemesAsPrivileged([{ scheme: 'journal-media', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 const path = require('path');
 const fs = require('fs');
 let autoUpdater = null;
@@ -51,6 +56,52 @@ ipcMain.handle('file:save', async (e, filename, data) => {
   return r.filePath;
 });
 ipcMain.handle('folder:open', () => shell.openPath(dataDir()));
+
+const mediaDir = () => path.join(dataDir(), 'media');
+const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp' };
+const safeName = n => { const b = path.basename(String(n || '')); return /^[A-Za-z0-9._-]+$/.test(b) && !b.startsWith('.') ? b : null; };
+function newMediaName(ext) {
+  ext = String(ext || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
+  const d = new Date(); const stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  return `${stamp}-${crypto.randomBytes(5).toString('hex')}.${ext}`;
+}
+ipcMain.handle('media:add', async (e, src) => {
+  fs.mkdirSync(mediaDir(), { recursive: true });
+  if (src && typeof src.path === 'string' && src.path) {
+    const st = await fs.promises.stat(src.path);
+    if (!st.isFile()) throw new Error('Not a file');
+    const name = newMediaName(path.extname(src.path).slice(1));
+    await fs.promises.copyFile(src.path, path.join(mediaDir(), name));
+    return { file: name, size: st.size };
+  }
+  if (src && src.bytes) {
+    const name = newMediaName(src.ext || 'png');
+    await fs.promises.writeFile(path.join(mediaDir(), name), Buffer.from(src.bytes));
+    return { file: name, size: src.bytes.byteLength };
+  }
+  throw new Error('Nothing to add');
+});
+ipcMain.handle('media:delete', async (e, files) => {
+  for (const f of Array.isArray(files) ? files : []) { const n = safeName(f); if (n) await fs.promises.rm(path.join(mediaDir(), n), { force: true }).catch(() => { }); }
+  return true;
+});
+function serveMedia(req) {
+  const u = new URL(req.url);
+  const name = safeName(decodeURIComponent(u.pathname.slice(1)));
+  if (!name) return new Response('Bad request', { status: 400 });
+  const file = path.join(mediaDir(), name);
+  let st; try { st = fs.statSync(file); } catch (e) { return new Response('Not found', { status: 404 }); }
+  const type = MIME[path.extname(name).toLowerCase()] || 'application/octet-stream';
+  const range = req.headers.get('range');
+  const m = range && /bytes=(\d*)-(\d*)/.exec(range);
+  if (m && (m[1] || m[2])) {
+    let start = m[1] ? parseInt(m[1], 10) : Math.max(0, st.size - parseInt(m[2], 10));
+    let end = m[1] && m[2] ? Math.min(parseInt(m[2], 10), st.size - 1) : st.size - 1;
+    if (start >= st.size || start > end) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${st.size}` } });
+    return new Response(Readable.toWeb(fs.createReadStream(file, { start, end })), { status: 206, headers: { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': String(end - start + 1), 'Content-Range': `bytes ${start}-${end}/${st.size}` } });
+  }
+  return new Response(Readable.toWeb(fs.createReadStream(file)), { status: 200, headers: { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': String(st.size) } });
+}
 
 function loadState() { try { return JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch (e) { return { width: 1440, height: 900 }; } }
 function saveState() {
@@ -108,5 +159,5 @@ Menu.setApplicationMenu(Menu.buildFromTemplate([
 ]));
 
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-app.whenReady().then(() => { createWindow(); setupUpdates(); });
+app.whenReady().then(() => { protocol.handle('journal-media', serveMedia); createWindow(); setupUpdates(); });
 app.on('window-all-closed', () => app.quit());

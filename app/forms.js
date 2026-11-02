@@ -7,11 +7,24 @@ function blankTrade() {
   const i0 = s.instruments[0] || { sym: 'ES', fee: 0 };
   return { id: uid(), account: (G.account !== 'all' ? G.account : s.defaultAccount) || s.accounts[0].id, instrument: i0.sym, dir: 'long', entryTime: lt(now), entry: null, size: 1, stop: null, target: null, exits: [{ price: null, size: 1, time: lt(now) }], fees: i0.fee || 0, setup: s.setups[0] || '', mfe: null, mae: null, stats: {}, comments: { pre: [], entry: [], mgmt: [], exit: [] }, notes: '', shots: [], _feeAuto: true };
 }
-function shotSrc(s) { return s.id ? '/_blob/' + s.id : s.data; }
+function shotSrc(s) { return s.file ? 'journal-media://m/' + encodeURIComponent(s.file) : s.id ? '/_blob/' + s.id : s.data; }
+const isVid = s => s.kind === 'video';
+function mediaThumb(sh, i, removable) {
+  const src = esc(shotSrc(sh));
+  const inner = isVid(sh)
+    ? `<video src="${src}#t=0.1" preload="metadata" muted playsinline></video><span class="playbadge" aria-hidden="true">▶</span>`
+    : `<img src="${src}" alt="Screenshot ${i + 1}">`;
+  return `<div class="shot ${isVid(sh) ? 'vid' : ''}"><button class="shot-open" data-zoom="${src}" data-kind="${isVid(sh) ? 'video' : 'image'}" aria-label="Open ${isVid(sh) ? 'clip' : 'screenshot'} ${i + 1}">${inner}</button>${sh.name ? `<span class="shot-name">${esc(sh.name)}</span>` : ''}${removable ? `<button class="btn sm shot-rm" data-delshot="${i}">Remove</button>` : ''}</div>`;
+}
+function discardForm() {
+  if (F && F._added) { const keep = new Set(mediaFiles(S.trades.find(t => t.id === F.id))); deleteMedia(F._added.filter(f => !keep.has(f))); }
+  F = null; IMP = null; closeModal();
+}
 
 function openTradeForm(t) {
   F = t ? clone(cleanTrade(t)) : blankTrade();
   if (t) F._feeAuto = false;
+  F._added = []; F._orig = mediaFiles(t);
   F.comments = Object.assign({ pre: [], entry: [], mgmt: [], exit: [] }, F.comments || {}); F.stats = F.stats || {}; F.shots = F.shots || []; F.exits = F.exits?.length ? F.exits : [{ price: null, size: F.size || 1, time: F.entryTime }];
   drawForm();
 }
@@ -42,10 +55,11 @@ function drawForm() {
       <div class="grid g3">${s.stats.map(st => `<div class="stack" style="gap:6px"><span class="lbl">${esc(st.name)}</span><div class="chips">${[...new Set([...st.values, ...(F.stats[st.id] || [])])].map(v => `<button class="chip ${(F.stats[st.id] || []).includes(v) ? 'on' : ''}" data-stat="${esc(st.id)}" data-val="${esc(v)}">${esc(v)}</button>`).join('')}</div></div>`).join('')}</div>
       <div class="sec-t">Comments</div>
       <div class="cgrid">${CATS.map(c => `<div class="stack" style="gap:6px"><span class="lbl">${CAT[c]}</span><div class="chips">${s.comments[c].map(x => `<button class="chip ${x.r > 0 ? 'cp' : 'cn'} ${(F.comments[c] || []).some(y => y.t === x.t) ? 'on' : ''}" data-cmtpick="${c}" data-val="${esc(x.t)}">${x.r > 0 ? '+ ' : '− '}${esc(x.t)}</button>`).join('')}</div></div>`).join('')}</div>
-      <div class="sec-t">Notes & screenshots</div>
+      <div class="sec-t">Notes, screenshots & clips</div>
       <textarea class="inp" data-f="notes" placeholder="What did you see? Why did you take it? What would you do differently?">${esc(F.notes || '')}</textarea>
-      <div class="shots" id="shots">${F.shots.map((sh, i) => `<div class="shot"><img src="${esc(shotSrc(sh))}" alt="Trade screenshot ${i + 1}" data-zoom="${esc(shotSrc(sh))}"><button class="btn sm" data-delshot="${i}">Remove</button></div>`).join('')}
-        <label class="drop" for="shot-in">Add a chart screenshot<br>or paste one here<input type="file" id="shot-in" accept="image/*" multiple hidden></label></div>
+      <div class="shots" id="shots">${F.shots.map((sh, i) => mediaThumb(sh, i, true)).join('')}
+        <label class="drop" for="shot-in" id="dropzone"><span><b>Add screenshots or clips</b><br>Click, drag files here, or paste a screenshot</span><input type="file" id="shot-in" accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.mkv" multiple hidden></label></div>
+      <div class="hint" id="shot-status"></div>
     </div>
     <div class="mfoot"><span class="hint" id="ferr"></span><div class="row"><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="save-trade">${isNew ? 'Save trade' : 'Save changes'}</button></div></div>
   </div>`);
@@ -69,17 +83,41 @@ function saveForm() {
   const exSz = sum(F.exits.map(e => e.size));
   if (F.exits.length && isNum(F.size) && exSz > F.size + 1e-9) { err.textContent = `Exits total ${exSz} contracts but the position is ${F.size}.`; return; }
   if (isNum(F.stop) && ((F.dir === 'long' && F.stop >= F.entry) || (F.dir === 'short' && F.stop <= F.entry))) { err.textContent = `The stop is on the wrong side of entry for a ${F.dir} trade.`; return; }
-  delete F._feeAuto;
+  const removed = (F._orig || []).filter(f => !mediaFiles(F).includes(f));
+  deleteMedia(removed);
+  delete F._feeAuto; delete F._added; delete F._orig;
   const t = clone(F);
   saveTrade(t); closeModal(); F = null;
   S.showDemo = false;
   toast('Trade saved'); render();
 }
 
+const VID_EXT = /\.(mp4|m4v|mov|webm|mkv)$/i;
 async function addShots(files) {
+  const status = $('#shot-status');
   for (const file of files) {
-    if (!file.type.startsWith('image/')) continue;
+    const video = file.type.startsWith('video/') || VID_EXT.test(file.name || '');
+    if (!video && !file.type.startsWith('image/')) { toast(`${file.name} isn't an image or video`); continue; }
     try {
+      if (DESK && DESK.addMedia) {
+        if (status) status.textContent = `Adding ${file.name || 'screenshot'}…`;
+        const p = DESK.pathFor ? DESK.pathFor(file) : '';
+        const r = p ? await DESK.addMedia({ path: p }) : await DESK.addMedia({ bytes: await file.arrayBuffer(), ext: (file.type.split('/')[1] || 'png').replace('jpeg', 'jpg') });
+        F.shots.push(video ? { file: r.file, kind: 'video', name: file.name || '' } : { file: r.file });
+        F._added.push(r.file);
+        if (status) status.textContent = '';
+        continue;
+      }
+      if (video) {
+        if (Store.mode === 'db' && Store.assets) {
+          if (file.size > 20 * 1024 * 1024) { toast('Clips over 20 MB only fit in the desktop app. Export a shorter or smaller clip.'); continue; }
+          if (status) status.textContent = `Uploading ${file.name}…`;
+          const r = await Store.assets.upload(file);
+          F.shots.push({ id: r.id, kind: 'video', name: file.name || '' });
+          if (status) status.textContent = '';
+        } else toast('Video clips need the desktop app.');
+        continue;
+      }
       if (Store.mode === 'db' && Store.assets) {
         const r = await Store.assets.upload(file);
         F.shots.push({ id: r.id });
@@ -88,9 +126,9 @@ async function addShots(files) {
         if (Store.mode === 'db' && data.length > 180000) { toast('That image is too large to store with the trade.'); continue; }
         F.shots.push({ data });
       }
-    } catch (e) { toast('Could not add screenshot: ' + (e?.message || e?.code || 'error')); }
+    } catch (e) { if (status) status.textContent = ''; toast('Could not add file: ' + (e?.message || e?.code || 'error')); }
   }
-  drawFormKeepScroll();
+  if (F) drawFormKeepScroll();
 }
 function shrink(file, max, q) {
   return new Promise((res, rej) => {
@@ -120,7 +158,7 @@ function openDetail(id) {
       ${(t.exits || []).length > 1 ? `<div><span class="lbl">Exits</span><table style="margin-top:4px"><tbody>${t.exits.map(e => `<tr><td class="num">${e.price}</td><td class="num">${e.size} ct</td><td class="muted">${fmtDate(e.time, true)}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${statsH}${cm}
       ${t.notes ? `<div><span class="lbl">Notes</span><div class="note" style="margin-top:4px">${esc(t.notes)}</div></div>` : ''}
-      ${(t.shots || []).length ? `<div class="shots">${t.shots.map((sh, i) => `<div class="shot"><img src="${esc(shotSrc(sh))}" alt="Screenshot ${i + 1}" data-zoom="${esc(shotSrc(sh))}"></div>`).join('')}</div>` : ''}
+      ${(t.shots || []).length ? `<div><span class="lbl">Screenshots & clips</span><div class="shots" style="margin-top:6px">${t.shots.map((sh, i) => mediaThumb(sh, i, false)).join('')}</div></div>` : ''}
       ${t.demo ? '<div class="banner">This is a sample trade. Log your own to edit and delete.</div>' : `<div class="row" id="dact"><button class="btn pri" data-edit="${esc(t.id)}">Edit</button><button class="btn" data-dup="${esc(t.id)}">Duplicate</button><button class="btn danger" data-del="${esc(t.id)}">Delete</button></div>`}
     </div>`);
 }
@@ -235,8 +273,13 @@ document.addEventListener('click', async e => {
   const el = e.target.closest('[data-act],[data-nav],[data-trade],[data-sub],[data-dir],[data-stat],[data-cmtpick],[data-delexit],[data-delshot],[data-zoom],[data-edit],[data-dup],[data-del],[data-simex],[data-cal],[data-day],[data-jd],[data-delinst],[data-delsetup],[data-delstat],[data-delval],[data-addval],[data-rate],[data-delcmt],[data-addcmt],[data-deltx],[data-scrim]');
   if (!el) return;
   const d = el.dataset;
-  if (d.scrim) { if (e.target === el) closeModal(); return; }
-  if (d.zoom) { const lb = document.createElement('div'); lb.className = 'lightbox'; lb.innerHTML = `<img src="${esc(d.zoom)}" alt="Screenshot">`; lb.onclick = () => lb.remove(); document.body.appendChild(lb); return; }
+  if (d.scrim) { if (e.target === el) discardForm(); return; }
+  if (d.zoom) {
+    const lb = document.createElement('div'); lb.className = 'lightbox';
+    if (d.kind === 'video') { lb.innerHTML = `<video src="${esc(d.zoom)}" controls autoplay playsinline></video><button class="btn lb-close">Close</button>`; lb.onclick = ev => { if (ev.target === lb || ev.target.classList.contains('lb-close')) lb.remove(); }; }
+    else { lb.innerHTML = `<img src="${esc(d.zoom)}" alt="Screenshot">`; lb.onclick = () => lb.remove(); }
+    document.body.appendChild(lb); return;
+  }
   if (d.nav) return goto(d.nav);
   if (d.trade) return openDetail(d.trade);
   if (d.sub) { const [k, v] = d.sub.split(':'); S.sub[k] = v; return render(); }
@@ -246,7 +289,7 @@ document.addEventListener('click', async e => {
   if (d.delexit != null && F) { F.exits.splice(+d.delexit, 1); return drawFormKeepScroll(); }
   if (d.delshot != null && F) { F.shots.splice(+d.delshot, 1); return drawFormKeepScroll(); }
   if (d.edit) { closeDrawer(); return openTradeForm(S.trades.find(t => t.id === d.edit)); }
-  if (d.dup) { const src = S.trades.find(t => t.id === d.dup); closeDrawer(); openTradeForm(src); F.id = uid(); F.shots = []; return drawForm(); }
+  if (d.dup) { const src = S.trades.find(t => t.id === d.dup); closeDrawer(); openTradeForm(src); F.id = uid(); F.shots = []; F._orig = []; return drawForm(); }
   if (d.del) { $('#dact').innerHTML = `<div class="confirm">Delete this trade? <button class="btn sm danger" data-act="del-yes" data-id="${esc(d.del)}">Delete</button><button class="btn sm" data-act="close-drawer">Keep</button></div>`; return; }
   if (d.simex) { const i = SIM.ex.indexOf(d.simex); i >= 0 ? SIM.ex.splice(i, 1) : SIM.ex.push(d.simex); return render(); }
   if (d.cal) { S.sub.cal = d.cal; return render(); }
@@ -264,7 +307,7 @@ document.addEventListener('click', async e => {
   if (d.deltx) { const a = accEl(el); a.txns = a.txns.filter(x => x.id !== d.deltx); saveSettings(); return render(); }
 
   switch (d.act) {
-    case 'close': F = null; IMP = null; return closeModal();
+    case 'close': return discardForm();
     case 'close-drawer': return closeDrawer();
     case 'copybox': { const ta = $('#copybox'); try { await navigator.clipboard.writeText(ta.value); toast('Copied'); } catch (_) { ta.select(); toast('Selected — press Ctrl/Cmd+C'); } return; }
     case 'new-trade': return openTradeForm(null);
@@ -363,13 +406,21 @@ document.addEventListener('change', async e => {
   if (el.id === 'cfg-be') { s.beR = Math.max(0, num(el.value) ?? 0.1); saveSettings(); S.trades.forEach(calc); return; }
   if (d.af) { const a = accEl(el); a[d.af] = d.af === 'start' ? num(el.value) : el.value; saveSettings(); return render(); }
 });
+// Drag files into the trade form; never let a dropped file replace the app page.
+document.addEventListener('dragover', e => { e.preventDefault(); const dz = $('#dropzone'); if (dz && F) dz.classList.add('over'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) { const dz = $('#dropzone'); if (dz) dz.classList.remove('over'); } });
+document.addEventListener('drop', e => {
+  e.preventDefault(); const dz = $('#dropzone'); if (dz) dz.classList.remove('over');
+  const files = [...(e.dataTransfer?.files || [])];
+  if (F && $('#shots') && files.length) addShots(files);
+});
 document.addEventListener('paste', e => {
   if (!F || !$('#shots')) return;
   const files = [...(e.clipboardData?.files || [])].filter(f => f.type.startsWith('image/'));
   if (files.length) { e.preventDefault(); addShots(files); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { const lb = $('.lightbox'); if (lb) return lb.remove(); if ($('#modal').innerHTML) { F = null; return closeModal(); } closeDrawer(); }
+  if (e.key === 'Escape') { const lb = $('.lightbox'); if (lb) return lb.remove(); if ($('#modal').innerHTML) return discardForm(); closeDrawer(); }
 });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => render());
 new MutationObserver(() => render()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

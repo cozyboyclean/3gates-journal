@@ -1,2 +1,3 @@
-- The app now updates itself. When a new version is ready you'll see "Restart now / Later".
-- Help → Check for updates, and Help → About (shows your version and where your data is saved).
+- Attach video clips to trades, alongside screenshots. Drag files into the trade form, click to choose them, or paste a screenshot with Ctrl+V.
+- Clips play right inside the trade, with full controls and scrubbing.
+- Screenshots and clips are saved in your data folder (File → Open data folder → media). Removing one from a trade, or deleting the trade, removes the file too.

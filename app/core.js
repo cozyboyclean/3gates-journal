@@ -336,7 +336,10 @@ function saveTrade(t) {
   if (i >= 0) S.trades[i] = t; else S.trades.push(t);
   if (Store.mode === 'db') writeDoc(Store.tcol.doc(t.id), 't:' + t.id, cleanTrade(t)); else saveLocal();
 }
+function mediaFiles(t) { return (t && t.shots || []).map(s => s.file).filter(Boolean); }
+function deleteMedia(files) { if (DESK && DESK.deleteMedia && files.length) DESK.deleteMedia(files).catch(() => { }); }
 function deleteTrade(id) {
+  deleteMedia(mediaFiles(S.trades.find(t => t.id === id)));
   S.trades = S.trades.filter(t => t.id !== id);
   if (Store.mode === 'db') writeDoc(Store.tcol.doc(id), 't:' + id, null); else saveLocal();
 }

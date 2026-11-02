@@ -150,10 +150,16 @@ tbody tr.click:hover td{background:var(--panel2)}
 .cgrid .chips{flex-direction:column;align-items:stretch}
 .cgrid .chip{border-radius:8px;text-align:left}
 .shots{display:flex;flex-wrap:wrap;gap:10px}
-.shot{position:relative;width:180px;max-width:100%;aspect-ratio:16/10;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--panel2)}
-.shot img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
-.shot button{position:absolute;top:5px;right:5px}
-.drop{border:1px dashed var(--line2);border-radius:8px;padding:14px;color:var(--muted);text-align:center;font-size:13px;width:180px;aspect-ratio:16/10;display:grid;place-items:center;cursor:pointer}
+.shot{position:relative;width:200px;max-width:100%;aspect-ratio:16/10;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--panel2)}
+.shot-open{all:unset;display:block;width:100%;height:100%;cursor:zoom-in}
+.shot-open:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.shot img,.shot video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;background:#000}
+.shot .shot-rm{position:absolute;top:5px;right:5px}
+.playbadge{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;background:rgba(10,14,22,.72);color:#fff;display:grid;place-items:center;font-size:15px;padding-left:3px;pointer-events:none}
+.shot-name{position:absolute;left:0;right:0;bottom:0;padding:14px 8px 5px;font-size:11px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.75));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.drop{border:1px dashed var(--line2);border-radius:8px;padding:14px;color:var(--muted);text-align:center;font-size:13px;width:200px;max-width:100%;aspect-ratio:16/10;display:grid;place-items:center;cursor:pointer}
+.drop b{color:var(--fg)}
+.drop.over{border-color:var(--accent);background:var(--accent-soft);color:var(--fg)}
 
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--panel);border-left:1px solid var(--line2);box-shadow:var(--shadow);z-index:40;display:flex;flex-direction:column;
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
@@ -195,7 +201,9 @@ tbody tr.click:hover td{background:var(--panel2)}
 .ratebtn{width:30px;height:30px;border-radius:8px;border:1px solid var(--line2);background:var(--panel2);font-weight:800;cursor:pointer;flex:none}
 .ratebtn.p{color:var(--pos);border-color:var(--pos)} .ratebtn.n{color:var(--neg);border-color:var(--neg)}
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:90;display:grid;place-items:center;padding:20px;cursor:zoom-out}
-.lightbox img{max-height:92vh;border-radius:8px}
+.lightbox img,.lightbox video{max-height:88vh;max-width:100%;border-radius:8px}
+.lightbox video{cursor:default;background:#000}
+.lb-close{position:fixed;top:max(16px,env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px))}
 .confirm{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--neg-soft)}
 .hint{font-size:12.5px;color:var(--muted)}
 

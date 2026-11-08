@@ -48,6 +48,7 @@ function fmtDay(s) { const d = parseLT(s); return d ? `${WD[d.getDay()]} ${MON[d
 /* ---------- defaults ---------- */
 function defaultSettings() {
   return {
+    missReasons: DEFAULT_MISS_REASONS.slice(),
     v: 1, currency: '$', beR: 0.1, defaultAccount: 'acc_main',
     accounts: [{ id: 'acc_main', name: 'Main account', broker: '', start: 50000, txns: [] }],
     instruments: [
@@ -73,9 +74,11 @@ function defaultSettings() {
     }
   };
 }
+const DEFAULT_MISS_REASONS = ['Hesitated', 'Away from screen', "Didn't see it in time", 'Doubted the setup', 'Hit daily trade limit', 'Outside trading hours'];
 function mergeDefaults(s) {
   const d = defaultSettings();
   const o = Object.assign({}, d, s || {});
+  if (!Array.isArray(o.missReasons)) o.missReasons = DEFAULT_MISS_REASONS.slice();
   for (const k of ['accounts', 'instruments', 'setups', 'stats']) if (!Array.isArray(o[k])) o[k] = d[k];
   o.comments = Object.assign({}, d.comments, o.comments || {});
   for (const c of CATS) if (!Array.isArray(o.comments[c])) o.comments[c] = [];
@@ -166,14 +169,24 @@ function metrics(list) {
     avgDay: dm, sharpe: dsd ? dm / dsd * Math.sqrt(252) : null,
     holdW: avg(W.map(t => t._.dur).filter(isNum)), holdL: avg(L.map(t => t._.dur).filter(isNum)),
     mfe: avg(c.map(t => t._.mfeR).filter(isNum)), mae: avg(c.map(t => t._.maeR).filter(isNum)),
-    eff: avg(c.map(t => t._.eff).filter(isNum)), planR: avg(c.map(t => t._.planR).filter(isNum)),
+    eff: avg(W.map(t => t._.eff).filter(isNum)), planR: avg(c.map(t => t._.planR).filter(isNum)),
     contracts: sum(c.map(t => t._.size)), disc: (tp + tn) ? tp / (tp + tn) : null, cpos: tp, cneg: tn,
   };
 }
 
 /* ---------- data selection ---------- */
+/* Every trade belongs to a book: executed (no kind field, the default), backtest ('bt') or missed ('missed').
+   Everything except the Backtest & missed screens and the comparison tab looks at executed trades only. */
+const BOOKS = { live: 'Executed', bt: 'Backtest', missed: 'Missed' };
+const bookOf = t => t && t.kind === 'bt' ? 'bt' : t && t.kind === 'missed' ? 'missed' : 'live';
 function usingDemo() { return S.loaded && S.trades.length === 0 && S.showDemo; }
-function allTrades() { return usingDemo() ? S.demo : S.trades; }
+function allTrades(book = 'live') {
+  const src = usingDemo() ? S.demo : S.trades;
+  if (book === 'any') return src;
+  const want = Array.isArray(book) ? book : [book];
+  return src.filter(t => want.includes(bookOf(t)));
+}
+function findTrade(id) { return S.trades.find(t => t.id === id) || S.demo.find(t => t.id === id); }
 function rangeBounds() {
   const now = new Date(); const t0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const back = d => { const x = new Date(t0); x.setDate(x.getDate() - d); return ymd(x); };
@@ -190,7 +203,7 @@ function rangeBounds() {
 }
 function scoped(opts = {}) {
   const [a, b] = opts.noRange ? ['0000', '9999'] : rangeBounds();
-  return allTrades().filter(t => (G.account === 'all' || t.account === G.account) && t._.date >= a && t._.date <= b)
+  return allTrades(opts.book || 'live').filter(t => (G.account === 'all' || bookOf(t) !== 'live' || t.account === G.account) && t._.date >= a && t._.date <= b)
     .sort((x, y) => x._.ts - y._.ts);
 }
 const closedScoped = o => scoped(o).filter(t => t._.closed);
@@ -224,7 +237,14 @@ function groupBy(list, fn) {
 
 /* ---------- demo data (shown only while the journal is empty) ---------- */
 function buildDemo() {
-  let seed = 20261021; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  return [
+    ...genDemo({ seed: 20261021, kind: null, early: 0.38, moved: 0.2, chase: 0.22, perDay: 3.2, winAdj: 0 }),
+    ...genDemo({ seed: 777001, kind: 'bt', early: 0, moved: 0, chase: 0, perDay: 2.6, winAdj: 0.02 }),
+    ...genDemo({ seed: 55511, kind: 'missed', early: 0, moved: 0, chase: 0, perDay: 1.25, winAdj: 0.08 }),
+  ];
+}
+function genDemo(o) {
+  let seed = o.seed; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const pick = a => a[Math.floor(rnd() * a.length)];
   const out = []; const today = new Date(); const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 84);
   let px = 5790;
@@ -232,7 +252,7 @@ function buildDemo() {
     const wd = d.getDay();
     if (wd > 0 && wd < 6) {
       px += (rnd() - 0.48) * 30;
-      const n = Math.floor(rnd() * 3.2);
+      const n = Math.floor(rnd() * o.perDay);
       let minute = 9 * 60 + 33 + Math.floor(rnd() * 25);
       for (let i = 0; i < n; i++) {
         const m1 = rnd() < 0.62; const setup = m1 ? S.settings.setups[0] : S.settings.setups[1];
@@ -243,22 +263,22 @@ function buildDemo() {
         const tgtR = m1 ? 2.5 : 2;
         const quality = pick(['A+', 'A', 'A', 'B', 'B', 'C']);
         const qBoost = quality === 'A+' ? 0.12 : quality === 'A' ? 0.05 : quality === 'B' ? -0.05 : -0.14;
-        const win = rnd() < (m1 ? 0.56 : 0.5) + qBoost;
+        const win = rnd() < (m1 ? 0.56 : 0.5) + qBoost + o.winAdj;
         const mist = []; const cm = { pre: [], entry: [], mgmt: [], exit: [] };
         const C = S.settings.comments;
         let rr, mfeR, maeR;
         if (win) {
-          const early = rnd() < 0.38;
+          const early = rnd() < o.early;
           rr = early ? 0.5 + rnd() * 1.1 : tgtR; mfeR = early ? tgtR * (0.8 + rnd() * 0.4) : tgtR + rnd() * 0.6; maeR = rnd() * 0.75;
           if (early) { mist.push('Early exit'); cm.exit.push(C.exit[2]); } else cm.exit.push(C.exit[0]);
         } else {
-          const moved = rnd() < 0.2;
+          const moved = rnd() < o.moved;
           rr = moved ? -(1.3 + rnd() * 0.5) : -1; mfeR = rnd() * 1.3; maeR = -rr;
           if (moved) { mist.push('Moved stop'); cm.mgmt.push(C.mgmt[2]); cm.exit.push(C.exit[3]); } else { cm.mgmt.push(C.mgmt[0]); cm.exit.push(C.exit[1]); }
         }
-        if (rnd() < 0.22) { mist.push(pick(['Chased entry', 'Entered early'])); cm.entry.push(rnd() < .5 ? C.entry[2] : C.entry[3]); rr -= 0.15; }
+        if (rnd() < o.chase) { mist.push(pick(['Chased entry', 'Entered early'])); cm.entry.push(rnd() < .5 ? C.entry[2] : C.entry[3]); rr -= 0.15; }
         else cm.entry.push(rnd() < .6 ? C.entry[0] : C.entry[1]);
-        if (i === 2 && !win) { mist.push('Revenge trade'); }
+        if (i === 2 && !win && !o.kind) { mist.push('Revenge trade'); }
         cm.pre.push(rnd() < 0.8 ? C.pre[0] : C.pre[2]);
         if (!mist.length) mist.push('None');
         for (const c of CATS) cm[c] = cm[c].filter(Boolean).map(x => ({ t: x.t, r: x.r }));
@@ -269,7 +289,7 @@ function buildDemo() {
         minute += dur + 6 + Math.floor(rnd() * 25);
         if (minute > 11 * 60 + 55) break;
         const t = {
-          id: 'demo' + out.length, demo: true, account: 'acc_main', instrument: 'ES', dir,
+          id: 'demo' + (o.kind || '') + out.length, demo: true, account: 'acc_main', instrument: 'ES', dir,
           entryTime: lt(st), entry, size, stop: entry - sg * stopPts, target: entry + sg * tgtR * stopPts,
           exits: [{ price: Math.round(exitPx * 4) / 4, size, time: lt(et) }],
           fees: +(size * 4.5).toFixed(2), setup,
@@ -280,8 +300,10 @@ function buildDemo() {
             day: [m1 ? pick(['Trend', 'Double distribution', 'Neutral']) : pick(['Balance', 'Neutral'])],
             agg: [pick(['Big trades', 'Delta', 'Tape speed', 'Footprint'])], qual: [quality]
           },
-          comments: cm, notes: '', shots: []
+          comments: o.kind ? { pre: [], entry: [], mgmt: [], exit: [] } : cm, notes: '', shots: []
         };
+        if (o.kind) { t.kind = o.kind; t.stats.mist = ['None']; delete t.stats.emo; }
+        if (o.kind === 'missed') t.missReason = pick(['Hesitated', 'Hesitated', 'Doubted the setup', 'Away from screen', "Didn't see it in time"]);
         out.push(calc(t));
       }
     }

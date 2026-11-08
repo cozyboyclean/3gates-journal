@@ -1,3 +1,4 @@
-- Attach video clips to trades, alongside screenshots. Drag files into the trade form, click to choose them, or paste a screenshot with Ctrl+V.
-- Clips play right inside the trade, with full controls and scrubbing.
-- Screenshots and clips are saved in your data folder (File → Open data folder → media). Removing one from a trade, or deleting the trade, removes the file too.
+- New Backtest & missed section: log backtest trades and the trades you saw but didn't take (with the reason you missed them). They stay out of your real stats. You can also import them from CSV.
+- New Executed vs backtest tab: compares your live results with your backtest results in R, shows the execution gap per trade and per 100 trades, breaks it down by setup, and totals what your missed trades would have made.
+- Add a note to each screenshot and clip. Notes show under each one and alongside it when you open it full size.
+- Fix: Exit efficiency now measures how much of the move your winning trades captured.

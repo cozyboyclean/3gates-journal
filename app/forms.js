@@ -47,10 +47,11 @@ function drawForm() {
         <div class="f"${bookOf(F) === 'live' ? '' : ' hidden'}><label for="ff-account">Account</label><select class="sel" id="ff-account" data-f="account">${s.accounts.map(a => `<option value="${esc(a.id)}" ${F.account === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></div>
         <div class="f"><label for="ff-instrument">Instrument</label><select class="sel" id="ff-instrument" data-f="instrument">${[...new Set([...s.instruments.map(i => i.sym), F.instrument])].map(x => `<option ${F.instrument === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
         <div class="f"><label>Direction</label><div class="seg" style="width:100%"><button style="flex:1" class="${F.dir !== 'short' ? 'on' : ''}" data-dir="long">Long</button><button style="flex:1" class="${F.dir === 'short' ? 'on' : ''}" data-dir="short">Short</button></div></div>
-        <div class="f"><label for="ff-setup">Setup</label><select class="sel" id="ff-setup" data-f="setup"><option value="">—</option>${[...new Set([...s.setups, F.setup].filter(Boolean))].map(x => `<option ${F.setup === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
+        <div class="f"><label for="ff-setup">Model</label><select class="sel" id="ff-setup" data-f="setup"><option value="">—</option>${[...new Set([...s.setups, F.setup].filter(Boolean))].map(x => `<option ${F.setup === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
         ${inp('entryTime', 'Entry time', 'datetime-local')}${inp('entry', 'Entry price')}${inp('size', 'Contracts')}${inp('fees', 'Commission & fees')}
         ${inp('stop', 'Initial stop')}${inp('target', 'Planned target')}${inp('mfe', 'Best price reached (MFE)')}${inp('mae', 'Worst price reached (MAE)')}
       </div>
+      ${pbFormSection()}
       <div class="sec-t">Exits</div>
       <div class="stack" style="gap:8px" id="exits">${F.exits.map((e, i) => `<div class="exitrow">
         <div class="f"><label>Exit price</label><input class="inp num" type="number" step="any" data-ex="${i}:price" value="${esc(e.price ?? '')}"></div>
@@ -74,6 +75,7 @@ function drawForm() {
 }
 function updatePreview() {
   const t = calc(clone(Object.assign({}, F, { _: null })));
+  pbUpdateStatus();
   const el = $('#fprev'); if (!el) return;
   el.innerHTML = `<div><label>Net P&L</label><b class="${cls(t._.pnl)}">${t._.closed ? fmtS$(t._.pnl, 2) : 'open'}</b></div>
     <div><label>R multiple</label><b class="${cls(t._.r)}">${fmtR(t._.r)}</b></div>
@@ -266,9 +268,9 @@ function impPreview() {
 
 function exportCSV() {
   const st = S.settings.stats;
-  const head = ['Type', 'Missed reason', 'Entry time', 'Exit time', 'Account', 'Instrument', 'Direction', 'Contracts', 'Entry', 'Avg exit', 'Stop', 'Target', 'MFE price', 'MAE price', 'Fees', 'Net P&L', 'R', 'Setup', ...st.map(s => s.name), ...CATS.map(c => 'Comments ' + CAT[c]), 'Notes'];
+  const head = ['Type', 'Missed reason', 'Playbook status', 'Setup / trigger', 'HTF setup', 'Location', 'Level', 'Trigger', 'Market state', 'Gate 1', 'Gate 2', 'Gate 3', 'Evidence before entry', 'Thesis', 'Trigger evidence', 'Objective', 'Rule breaks', 'Entry time', 'Exit time', 'Account', 'Instrument', 'Direction', 'Contracts', 'Entry', 'Avg exit', 'Stop', 'Target', 'MFE price', 'MAE price', 'Fees', 'Net P&L', 'R', 'Setup', ...st.map(s => s.name), ...CATS.map(c => 'Comments ' + CAT[c]), 'Notes'];
   const q = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const rows = S.trades.slice().sort((a, b) => a._.ts - b._.ts).map(t => [BOOKS[bookOf(t)], t.missReason || '', t.entryTime, (t.exits || []).map(e => e.time).sort().pop() || '', S.settings.accounts.find(a => a.id === t.account)?.name || '', t.instrument, t.dir, t._.size, t.entry, isNum(t._.avgExit) ? +t._.avgExit.toFixed(5) : '', t.stop ?? '', t.target ?? '', t.mfe ?? '', t.mae ?? '', t._.fees, isNum(t._.pnl) ? t._.pnl.toFixed(2) : '', isNum(t._.r) ? t._.r.toFixed(3) : '', t.setup || '', ...st.map(s => (t.stats?.[s.id] || []).join('; ')), ...CATS.map(c => (t.comments?.[c] || []).map(x => x.t).join('; ')), t.notes || ''].map(q).join(','));
+  const rows = S.trades.slice().sort((a, b) => a._.ts - b._.ts).map(t => { const c = pbClassify(t), p = t.pb || {}; return [BOOKS[bookOf(t)], t.missReason || '', PB_CLASS[c.status][0], pbLabel(t), pbItem('htf', p.htf)?.name || '', p.loc || '', p.level || '', pbItem('trig', p.trig)?.name || '', PB_STATES[p.state] || '', p.g1 || '', p.g2 || '', p.g3 || '', p.pre || '', p.thesis || '', p.evidence || '', p.objective || '', c.reasons.join('; '), t.entryTime, (t.exits || []).map(e => e.time).sort().pop() || '', S.settings.accounts.find(a => a.id === t.account)?.name || '', t.instrument, t.dir, t._.size, t.entry, isNum(t._.avgExit) ? +t._.avgExit.toFixed(5) : '', t.stop ?? '', t.target ?? '', t.mfe ?? '', t.mae ?? '', t._.fees, isNum(t._.pnl) ? t._.pnl.toFixed(2) : '', isNum(t._.r) ? t._.r.toFixed(3) : '', t.setup || '', ...st.map(s => (t.stats?.[s.id] || []).join('; ')), ...CATS.map(c => (t.comments?.[c] || []).map(x => x.t).join('; ')), t.notes || ''].map(q).join(','); });
   if (!rows.length) { toast('No trades to export yet'); return; }
   offerFile(`trades-${ymd(new Date())}.csv`, [head.map(q).join(','), ...rows].join('\n'));
 }
@@ -281,7 +283,7 @@ function goto(v) { S.view = v; closeDrawer(); try { history.replaceState(null, '
 function accEl(el) { const a = el.closest('[data-acc]'); return a && S.settings.accounts.find(x => x.id === a.dataset.acc); }
 
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-act],[data-nav],[data-trade],[data-sub],[data-dir],[data-stat],[data-cmtpick],[data-delexit],[data-delshot],[data-zoom],[data-edit],[data-dup],[data-del],[data-simex],[data-cal],[data-day],[data-jd],[data-delinst],[data-delsetup],[data-delstat],[data-delval],[data-addval],[data-rate],[data-delcmt],[data-addcmt],[data-deltx],[data-scrim],[data-book],[data-miss],[data-delmissr]');
+  const el = e.target.closest('[data-act],[data-nav],[data-trade],[data-sub],[data-dir],[data-stat],[data-cmtpick],[data-delexit],[data-delshot],[data-zoom],[data-edit],[data-dup],[data-del],[data-simex],[data-cal],[data-day],[data-jd],[data-delinst],[data-delsetup],[data-delstat],[data-delval],[data-addval],[data-rate],[data-delcmt],[data-addcmt],[data-deltx],[data-scrim],[data-book],[data-miss],[data-delmissr],[data-pbset],[data-pbadd],[data-pbdelloc]');
   if (!el) return;
   const d = el.dataset;
   if (d.scrim) { if (e.target === el) discardForm(); return; }
@@ -296,6 +298,9 @@ document.addEventListener('click', async e => {
   if (d.nav) return goto(d.nav);
   if (d.trade) return openDetail(d.trade);
   if (d.sub) { const [k, v] = d.sub.split(':'); S.sub[k] = v; return render(); }
+  if (d.pbset && F) { F.pb = Object.assign({}, F.pb, { [d.pbset]: d.val }); $$(`[data-pbset="${d.pbset}"]`).forEach(b => b.className = b.dataset.val === d.val ? 'on ' + d.val : ''); return updatePreview(); }
+  if (d.pbadd) { const k = d.pbadd; const code = $(`#pbnew-${k}-code`).value.trim(), name = $(`#pbnew-${k}-name`).value.trim(); if (!code || !name) return toast('Give it a code and a name'); pbLib()[k].push({ id: (k === 'htf' ? 'htf_' : 'trg_') + uid(), code, name, status: 'candidate', def: '' }); saveSettings(); return render(); }
+  if (d.pbdelloc != null) { pbLib().loc.splice(+d.pbdelloc, 1); saveSettings(); return render(); }
   if (d.book && F && !d.act) { F.kind = d.book === 'live' ? undefined : d.book; return drawFormKeepScroll(); }
   if (d.miss && F) { F.missReason = F.missReason === d.miss ? undefined : d.miss; $$('[data-miss]').forEach(b => b.classList.toggle('on', b.dataset.miss === F.missReason)); return; }
   if (d.delmissr != null) { S.settings.missReasons.splice(+d.delmissr, 1); saveSettings(); return render(); }
@@ -327,6 +332,8 @@ document.addEventListener('click', async e => {
     case 'close-drawer': return closeDrawer();
     case 'copybox': { const ta = $('#copybox'); try { await navigator.clipboard.writeText(ta.value); toast('Copied'); } catch (_) { ta.select(); toast('Selected — press Ctrl/Cmd+C'); } return; }
     case 'new-trade': return openTradeForm(null);
+    case 'pb-add-loc': { const v = $('#pbnew-loc').value.trim(); if (v && !pbLib().loc.includes(v)) { pbLib().loc.push(v); saveSettings(); render(); } return; }
+    case 'pb-review-queue': TF.pb = 'unreviewed'; return goto('trades');
     case 'new-missed': return openTradeForm(null, 'missed');
     case 'new-bt': return openTradeForm(null, 'bt');
     case 'add-missr': { const v = $('#new-missr').value.trim(); if (v && !S.settings.missReasons.includes(v)) { S.settings.missReasons.push(v); saveSettings(); render(); } return; }
@@ -374,6 +381,7 @@ function onField(e) {
     if (k === 'entryTime' && F.exits.length === 1 && (!F.exits[0].time || F.exits[0].time < F.entryTime)) { F.exits[0].time = F.entryTime; const ex = $('[data-ex="0:time"]'); if (ex) ex.value = F.entryTime; }
     return updatePreview();
   }
+  if (d.pb && F) { F.pb = Object.assign({}, F.pb, { [d.pb]: el.value || undefined }); if (!el.value) delete F.pb[d.pb]; return updatePreview(); }
   if (d.ex && F) { const [i, k] = d.ex.split(':'); F.exits[+i][k] = k === 'time' ? el.value : num(el.value); return updatePreview(); }
   if (d.j) {
     const date = S.sub.jd || ymd(new Date()); const obj = Object.assign({}, S.journal[date] || {}, { [d.j]: el.value, date });
@@ -392,7 +400,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', async e => {
   const el = e.target; const d = el.dataset; const s = S.settings;
-  if (el.tagName === 'SELECT' && (d.f || d.j)) return onField(e);
+  if (el.tagName === 'SELECT' && (d.f || d.j || d.pb)) return onField(e);
   if (el.id === 'g-acc') { G.account = el.value; saveFilters(); return render(); }
   if (el.id === 'g-range') { G.range = el.value; saveFilters(); return render(); }
   if (el.id === 'g-from' || el.id === 'g-to') { G[el.id.slice(2)] = el.value; saveFilters(); return render(); }
@@ -419,6 +427,9 @@ document.addEventListener('change', async e => {
   }
   // settings fields
   if (d.inst) { const [n, k] = d.inst.split(':'); s.instruments[+n][k] = k === 'sym' ? el.value.trim().toUpperCase() : num(el.value) ?? 0; saveSettings(); S.trades.forEach(calc); return; }
+  if (d.pblib) { const [k, n, f] = d.pblib.split(':'); const it = pbLib()[k][+n]; if (!it) return; const v = f === 'def' ? el.value : el.value.trim(); if (!v && f !== 'def') return render(); it[f] = v; saveSettings(); return render(); }
+  if (d.pbpair) { const P = pbLib().pairs; const i = P.indexOf(d.pbpair); if (el.checked && i < 0) P.push(d.pbpair); if (!el.checked && i >= 0) P.splice(i, 1); return saveSettings(); }
+  if (d.pbloc != null) { const L = pbLib().loc; const old = L[+d.pbloc]; const v = el.value.trim(); if (!v) return render(); L[+d.pbloc] = v; saveSettings(); S.trades.filter(t => t.pb && t.pb.loc === old).forEach(t => { t.pb.loc = v; saveTrade(t); }); return; }
   if (d.missr != null) { const old = s.missReasons[+d.missr]; const v = el.value.trim(); if (!v) return; s.missReasons[+d.missr] = v; saveSettings(); S.trades.filter(t => t.missReason === old).forEach(t => { t.missReason = v; saveTrade(t); }); return; }
   if (d.setup != null) { const old = s.setups[+d.setup]; const v = el.value.trim(); if (!v) return; s.setups[+d.setup] = v; saveSettings(); S.trades.filter(t => t.setup === old).forEach(t => { t.setup = v; saveTrade(t); }); return; }
   if (d.statname != null) { s.stats[+d.statname].name = el.value.trim() || s.stats[+d.statname].name; return saveSettings(); }

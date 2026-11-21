@@ -13,15 +13,16 @@ const IC = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   replay: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M10 9l5 3-5 3z"/>',
+  book: '<path d="M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4z"/><path d="M8 9h6M8 13h4"/><path d="m14 16 2 2 4-4"/>',
   gap: '<path d="M5 20V8M10 20V4M15 20v-9M20 20v-5"/><path d="M3 20h18"/><path d="M15 11l5-6" stroke-dasharray="2 2"/>',
 };
 const icon = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${IC[k]}</svg>`;
 const NAV = [
   ['Journal', [['dashboard', 'Dashboard', 'dash'], ['trades', 'Trades', 'trades'], ['review', 'Backtest & missed', 'replay'], ['diary', 'Daily journal', 'journal'], ['calendar', 'Calendar', 'cal']]],
-  ['Analytics', [['analytics', 'Statistics', 'stats'], ['gap', 'Executed vs backtest', 'gap'], ['edge', 'Edge Finder', 'edge'], ['tilt', 'Tiltmeter', 'tilt'], ['simulator', 'Simulator', 'sim']]],
+  ['Analytics', [['analytics', 'Statistics', 'stats'], ['playbook', 'Playbook', 'book'], ['gap', 'Executed vs backtest', 'gap'], ['edge', 'Edge Finder', 'edge'], ['tilt', 'Tiltmeter', 'tilt'], ['simulator', 'Simulator', 'sim']]],
   ['Manage', [['accounts', 'Accounts', 'acct'], ['config', 'Settings', 'gear']]],
 ];
-const TITLES = { review: 'Backtest & missed trades', gap: 'Executed vs backtest & missed', dashboard: 'Dashboard', trades: 'Trades', diary: 'Daily journal', calendar: 'Calendar', analytics: 'Statistics', edge: 'Edge Finder', tilt: 'Tiltmeter', simulator: 'Simulator', accounts: 'Accounts', config: 'Settings' };
+const TITLES = { playbook: 'Playbook compliance', review: 'Backtest & missed trades', gap: 'Executed vs backtest & missed', dashboard: 'Dashboard', trades: 'Trades', diary: 'Daily journal', calendar: 'Calendar', analytics: 'Statistics', edge: 'Edge Finder', tilt: 'Tiltmeter', simulator: 'Simulator', accounts: 'Accounts', config: 'Settings' };
 
 function renderSide() {
   const sync = Store.mode === 'db' ? `<span class="sync ok"><i></i>Synced to your account</span>` : Store.mode === 'local' ? (DESK ? `<span class="sync ok"><i></i>Saved on this PC</span>` : `<span class="sync local"><i></i>Saved in this browser</span>`) : `<span class="sync"><i></i>Connecting…</span>`;
@@ -136,9 +137,9 @@ function miniTable(rows) {
 const bookPill = t => { const b = bookOf(t); return `<span class="pill book-${b}">${BOOKS[b]}</span>`; };
 function tradeTable(list, compact, showBook) {
   if (!list.length) return '<div class="empty">No trades match.</div>';
-  return `<div class="tbl-wrap"><table><thead><tr><th>Date</th>${showBook ? '<th>Type</th>' : ''}<th>Instr.</th><th>Side</th>${compact ? '' : '<th>Setup</th>'}<th class="r">Size</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">P&L</th><th class="r">R</th>${compact ? '' : `<th class="r">Hold</th><th>${showBook ? 'Mistakes / why missed' : 'Mistakes'}</th>`}${showBook ? '' : '<th>Tilt</th>'}<th>Result</th></tr></thead><tbody>
+  return `<div class="tbl-wrap"><table><thead><tr><th>Date</th>${showBook ? '<th>Type</th>' : ''}<th>Instr.</th><th>Side</th>${compact ? '' : '<th>Setup / trigger</th><th>Playbook</th>'}<th class="r">Size</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">P&L</th><th class="r">R</th>${compact ? '' : `<th class="r">Hold</th><th>${showBook ? 'Mistakes / why missed' : 'Mistakes'}</th>`}${showBook ? '' : '<th>Tilt</th>'}<th>Result</th></tr></thead><tbody>
   ${list.map(t => `<tr class="click" data-trade="${esc(t.id)}"><td>${fmtDate(t.entryTime, true)}</td>${showBook ? `<td>${bookPill(t)}</td>` : ''}<td><b>${esc(t.instrument)}</b></td><td><span class="pill ${t.dir === 'short' ? 'short' : 'long'}">${t.dir === 'short' ? 'Short' : 'Long'}</span></td>
-    ${compact ? '' : `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${esc(t.setup || '—')}</td>`}
+    ${compact ? '' : `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${pbLabel(t) ? `<b class="mono">${esc(pbLabel(t))}</b>${t.setup ? `<br><span class="faint" style="font-size:11.5px">${esc(t.setup)}</span>` : ''}` : esc(t.setup || '—')}</td><td>${pbPill(t)}</td>`}
     <td class="r num">${t._.size || '—'}</td><td class="r num">${isNum(t.entry) ? t.entry : '—'}</td><td class="r num">${isNum(t._.avgExit) ? +t._.avgExit.toFixed(4) : '—'}</td>
     <td class="r num ${cls(t._.pnl)}">${t._.closed ? fmtS$(t._.pnl, 2) : 'open'}</td><td class="r num ${cls(t._.r)}">${fmtR(t._.r)}</td>
     ${compact ? '' : `<td class="r num">${fmtDur(t._.dur)}</td><td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(bookOf(t) === 'missed' ? (t.missReason || '') : (t.stats?.mist || []).filter(x => x !== 'None').join(', ') || '')}</td>`}
@@ -147,16 +148,17 @@ function tradeTable(list, compact, showBook) {
 }
 
 /* ---------- Trades ---------- */
-const TF = { q: '', setup: '', dir: '', res: '', inst: '', sort: 'date', desc: true };
+const TF = { q: '', pb: '', setup: '', dir: '', res: '', inst: '', sort: 'date', desc: true };
 VIEWS.trades = {
   html() {
     let L = scoped();
     const insts = [...new Set(L.map(t => t.instrument))];
     if (TF.setup) L = L.filter(t => t.setup === TF.setup);
+    if (TF.pb) L = L.filter(t => pbClassify(t).status === TF.pb);
     if (TF.dir) L = L.filter(t => t.dir === TF.dir);
     if (TF.res) L = L.filter(t => t._.res === TF.res);
     if (TF.inst) L = L.filter(t => t.instrument === TF.inst);
-    if (TF.q) { const q = TF.q.toLowerCase(); L = L.filter(t => JSON.stringify([t.notes, t.setup, t.stats, t.comments, t.instrument]).toLowerCase().includes(q)); }
+    if (TF.q) { const q = TF.q.toLowerCase(); L = L.filter(t => JSON.stringify([t.notes, t.setup, t.stats, t.comments, t.instrument, t.pb, pbLabel(t)]).toLowerCase().includes(q)); }
     const key = { date: t => t._.ts, pnl: t => t._.pnl ?? -1e12, r: t => t._.r ?? -1e9 }[TF.sort];
     L.sort((a, b) => (key(a) - key(b)) * (TF.desc ? -1 : 1));
     const m = metrics(L);
@@ -164,7 +166,8 @@ VIEWS.trades = {
       <div class="row between" style="margin-bottom:12px">
         <div class="row">
           <input class="inp" id="tf-q" placeholder="Search notes, tags, comments" value="${esc(TF.q)}" style="width:230px">
-          <select class="sel" id="tf-setup"><option value="">All setups</option>${S.settings.setups.map(s => `<option ${TF.setup === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
+          <select class="sel" id="tf-pb"><option value="">Any playbook status</option>${Object.entries(PB_CLASS).map(([k, v]) => `<option value="${k}" ${TF.pb === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
+          <select class="sel" id="tf-setup"><option value="">All models</option>${S.settings.setups.map(s => `<option ${TF.setup === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
           <select class="sel" id="tf-inst"><option value="">All instruments</option>${insts.map(s => `<option ${TF.inst === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
           <select class="sel" id="tf-dir"><option value="">Long & short</option><option value="long" ${TF.dir === 'long' ? 'selected' : ''}>Long</option><option value="short" ${TF.dir === 'short' ? 'selected' : ''}>Short</option></select>
           <select class="sel" id="tf-res"><option value="">All results</option>${[['W', 'Winners'], ['L', 'Losers'], ['BE', 'Break-even'], ['OPEN', 'Open']].map(([v, l]) => `<option value="${v}" ${TF.res === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -575,7 +578,8 @@ VIEWS.accounts = {
 VIEWS.config = {
   html() {
     const s = S.settings;
-    return `<div class="grid g2">
+    return `${pbSettingsPanel()}
+    <div class="grid g2">
       <div class="panel stack"><h2>Instruments <small>point value drives P&L</small></h2>
         <div class="tbl-wrap"><table><thead><tr><th>Symbol</th><th>$ / point</th><th>Tick size</th><th>Fee / contract (round trip)</th><th></th></tr></thead><tbody>
           ${s.instruments.map((i, n) => `<tr><td><input class="inp" style="width:80px" data-inst="${n}:sym" value="${esc(i.sym)}"></td><td><input class="inp num" type="number" step="any" style="width:90px" data-inst="${n}:pv" value="${i.pv}"></td><td><input class="inp num" type="number" step="any" style="width:80px" data-inst="${n}:tick" value="${i.tick}"></td><td><input class="inp num" type="number" step="any" style="width:90px" data-inst="${n}:fee" value="${i.fee ?? 0}"></td><td><button class="btn sm ghost" data-delinst="${n}">Remove</button></td></tr>`).join('')}
@@ -584,7 +588,7 @@ VIEWS.config = {
           <div class="f"><label>Currency symbol</label><input class="inp" id="cfg-cur" value="${esc(s.currency)}" maxlength="3"></div>
           <div class="f"><label>Break-even band (±R)</label><input class="inp num" type="number" step="0.01" min="0" id="cfg-be" value="${s.beR}"></div>
         </div></div>
-      <div class="panel stack"><h2>Setups / strategies</h2>
+      <div class="panel stack"><h2>Models <small>your original setup list, kept as is</small></h2>
         <div class="ed-list">${s.setups.map((x, n) => `<div class="ed-row"><input class="inp" data-setup="${n}" value="${esc(x)}"><button class="btn sm ghost" data-delsetup="${n}">Remove</button></div>`).join('')}</div>
         <div class="row"><input class="inp" id="new-setup" placeholder="New setup name" style="flex:1"><button class="btn sm" data-act="add-setup">Add</button></div>
         <h2 style="margin-top:12px">Reasons for missed trades</h2>

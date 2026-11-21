@@ -1,4 +1,6 @@
-- New Backtest & missed section: log backtest trades and the trades you saw but didn't take (with the reason you missed them). They stay out of your real stats. You can also import them from CSV.
-- New Executed vs backtest tab: compares your live results with your backtest results in R, shows the execution gap per trade and per 100 trades, breaks it down by setup, and totals what your missed trades would have made.
-- Add a note to each screenshot and clip. Notes show under each one and alongside it when you open it full size.
-- Fix: Exit efficiency now measures how much of the move your winning trades captured.
+- Each trade now has a Playbook section: market state, HTF auction setup (why), location (where), execution trigger (when), level, objective, thesis and trigger evidence, plus Yes / No / Unknown for Gate 1, Gate 2, Gate 3 and "evidence captured before entry".
+- Trades show a compact label like FA / ZPS and a status: Playbook, Off-playbook, Research, Undetermined or Not classified. The status comes from your rules only, never from P&L.
+- New Settings → Playbook library: your HTF setups, triggers and locations, each Approved, Research candidate or Deprecated, plus a grid of approved setup × trigger pairs. FA, VRE and IC (setups) and ZPS, AR and TC (triggers) start as research candidates. Nothing is approved until you approve it.
+- New Analytics → Playbook tab: compliance rate, playbook vs off-playbook results, most common rule breaks, and results by setup, trigger, pair and market state, with small-sample warnings.
+- Edge Finder and the Simulator can now group by HTF setup, trigger, pair, location, market state and playbook status. The Trades list can filter by playbook status, and "Not classified" works as a review queue.
+- Your existing trades and your original Setup list (now called Models) are unchanged. Old trades show "Not classified" until you review them.

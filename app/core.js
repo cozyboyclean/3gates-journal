@@ -79,6 +79,7 @@ function mergeDefaults(s) {
   const d = defaultSettings();
   const o = Object.assign({}, d, s || {});
   if (!Array.isArray(o.missReasons)) o.missReasons = DEFAULT_MISS_REASONS.slice();
+  if (typeof mergePlaybook === 'function') o.playbook = mergePlaybook(o.playbook);
   for (const k of ['accounts', 'instruments', 'setups', 'stats']) if (!Array.isArray(o[k])) o[k] = d[k];
   o.comments = Object.assign({}, d.comments, o.comments || {});
   for (const c of CATS) if (!Array.isArray(o.comments[c])) o.comments[c] = [];
@@ -212,7 +213,8 @@ const closedScoped = o => scoped(o).filter(t => t._.closed);
 function hourLabel(h) { return h == null ? '—' : `${pad(h)}:00`; }
 function dims() {
   const d = [
-    { id: 'setup', name: 'Setup', fn: t => t.setup || '(no setup)' },
+    { id: 'setup', name: 'Model', fn: t => t.setup || '(no model)' },
+    ...(typeof pbDims === 'function' ? pbDims() : []),
     { id: 'dir', name: 'Direction', fn: t => t.dir === 'short' ? 'Short' : 'Long' },
     { id: 'inst', name: 'Instrument', fn: t => t.instrument || '—' },
     { id: 'wd', name: 'Weekday', fn: t => WD[t._.wd] },

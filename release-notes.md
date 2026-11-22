@@ -1,3 +1,1 @@
-- Tag a trade with more than one location. Locations are now chips in the Playbook section; tick every reference the trade was framed on (for example Prior-day VAL + Prior-day HVN).
-- Trades that already had a location keep it, and renaming a location in Settings updates every trade tagged with it.
-- Objective / target reference now sits next to Level / zone, to keep the form shorter.
+- Fix: updates no longer stop with "3 Gates Trade Journal cannot be closed". Choosing Restart now closes the app cleanly (saving first), installs quietly and reopens the journal. If any part of the app is still running in the background, the installer ends it itself.

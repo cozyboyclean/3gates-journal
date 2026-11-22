@@ -140,10 +140,21 @@ function setupUpdates() {
     manualCheck = false;
     const notes = typeof info.releaseNotes === 'string' ? info.releaseNotes.replace(/<[^>]+>/g, '').trim() : '';
     const r = await dialog.showMessageBox(win, { type: 'info', buttons: ['Restart now', 'Later'], defaultId: 0, cancelId: 1, message: `Version ${info.version} is ready`, detail: (notes ? notes + '\n\n' : '') + 'Restart to update. Your trades are not affected. If you choose Later, it installs the next time you close the app.' });
-    if (r.response === 0) autoUpdater.quitAndInstall();
+    if (r.response === 0) installNow();
   });
   autoUpdater.checkForUpdates().catch(() => { });
   setInterval(() => autoUpdater.checkForUpdates().catch(() => { }), 4 * 60 * 60 * 1000);
+}
+// Close every window first (each one saves the journal on its way out), then hand over to the installer
+// silently and relaunch afterwards, so nothing of the app is still running when the installer starts.
+async function installNow() {
+  app.removeAllListeners('window-all-closed');
+  await Promise.all(BrowserWindow.getAllWindows().map(w => new Promise(res => {
+    if (w.isDestroyed()) return res();
+    w.once('closed', res); w.close();
+    setTimeout(res, 3000);
+  })));
+  autoUpdater.quitAndInstall(true, true);
 }
 function checkNow() {
   if (!autoUpdater || !app.isPackaged) return dialog.showMessageBox(win, { message: 'Updates are only available in the installed app.' });

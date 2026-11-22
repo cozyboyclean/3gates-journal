@@ -1,6 +1,7 @@
 /* ===== Playbook: three-layer classification (HTF setup / location / LTF trigger) and compliance =====
-   Trade field:   t.pb = { state, htf, loc, level, trigs: [id], thesis, evidence, objective, g1, g2, g3, pre }
-                  htf/trigs hold library item ids (older trades may have a single `trig` id instead of `trigs`);
+   Trade field:   t.pb = { state, htf, locs: [name], level, trigs: [id], thesis, evidence, objective, g1, g2, g3, pre }
+                  htf/trigs hold library item ids, locs hold location names (older trades may have a single
+                  `trig` / `loc` instead of `trigs` / `locs`);
                   g1/g2/g3/pre are 'yes' | 'no' | 'unknown'.
    Settings:      S.settings.playbook = { htf: [item], trig: [item], loc: [name], pairs: ['htfId|trigId'], deleted: { id: {code, name} } }
                   Deleting a (deprecated) item keeps a snapshot in `deleted` so trades tagged with it stay readable.
@@ -53,8 +54,9 @@ function pbRef(kind, id) {
   const d = (pbLib().deleted || {})[id];
   return d ? { id, code: d.code, name: d.name, status: 'deleted' } : { id, code: '?', name: 'Unknown', status: 'deleted' };
 }
+const pbLocs = p => !p ? [] : Array.isArray(p.locs) ? p.locs : p.loc ? [p.loc] : [];
 const pbTrigIds = p => !p ? [] : Array.isArray(p.trigs) ? p.trigs : p.trig ? [p.trig] : [];
-const pbHas = t => { const p = t.pb; return !!p && (['state', 'htf', 'loc', 'g1', 'g2', 'g3', 'pre', 'thesis'].some(k => p[k]) || pbTrigIds(p).length > 0); };
+const pbHas = t => { const p = t.pb; return !!p && (['state', 'htf', 'g1', 'g2', 'g3', 'pre', 'thesis'].some(k => p[k]) || pbTrigIds(p).length > 0 || pbLocs(p).length > 0); };
 const pbCode = x => x.status === 'deleted' ? x.code + ' (deleted)' : x.code;
 
 function pbLabel(t) {
@@ -76,7 +78,7 @@ function pbClassify(t) {
   if (gs.some(g => g.status === 'candidate')) research = true;
   // every tagged trigger must be an approved pair with the setup
   if (h && h.status === 'approved' && gs.length && gs.every(g => g.status === 'approved') && gs.some(g => !pbLib().pairs.includes(h.id + '|' + g.id))) reasons.push('Setup / trigger pair not approved');
-  if (!p.loc) reasons.push('No trade location');
+  if (!pbLocs(p).length) reasons.push('No trade location');
   const gate = (k, msg, label) => { if (p[k] === 'no') reasons.push(msg); else if (p[k] !== 'yes') unknown.push(label); };
   gate('g1', 'Gate 1 failed: market state', 'Gate 1');
   gate('g2', 'Gate 2 failed: location', 'Gate 2');
@@ -97,7 +99,7 @@ function pbDims() {
     { id: 'pb_htf', name: 'HTF setup', fn: t => nm('htf', t.pb?.htf) },
     { id: 'pb_trig', name: 'Execution trigger', fn: t => { const ids = pbTrigIds(t.pb); return ids.length ? ids.map(id => nm('trig', id)) : '(none)'; } },
     { id: 'pb_pair', name: 'Setup / trigger pair', fn: t => pbLabel(t) || '(none)' },
-    { id: 'pb_loc', name: 'Trade location', fn: t => t.pb?.loc || '(none)' },
+    { id: 'pb_loc', name: 'Trade location', fn: t => { const l = pbLocs(t.pb); return l.length ? l : '(none)'; } },
     { id: 'pb_state', name: 'Market state', fn: t => PB_STATES[t.pb?.state] || '(none)' },
   ];
 }
@@ -117,6 +119,11 @@ function pbTrigChips(sel) {
   const old = sel.map(id => pbRef('trig', id)).filter(x => x.status === 'deprecated' || x.status === 'deleted');
   return `<div class="trigpick">${appr.length ? `<div class="chips"><span class="faint tp-l">Approved</span>${appr.map(chip).join('')}</div>` : ''}${cand.length ? `<div class="chips"><span class="faint tp-l">Research candidates</span>${cand.map(chip).join('')}</div>` : ''}${old.length ? `<div class="chips"><span class="faint tp-l">No longer in use</span>${old.map(chip).join('')}</div>` : ''}${!L.length && !old.length ? '<span class="muted">Add triggers in Settings → Playbook library.</span>' : ''}</div>`;
 }
+function pbLocChips(sel) {
+  const all = [...new Set([...pbLib().loc, ...sel])];
+  if (!all.length) return '<span class="muted">Add locations in Settings → Playbook library.</span>';
+  return `<div class="chips">${all.map(x => `<button class="chip ${sel.includes(x) ? 'on' : ''}" data-pbloctag="${esc(x)}">${esc(x)}</button>`).join('')}</div>`;
+}
 function pbFormSection() {
   const p = F.pb || {}; const lib = pbLib();
   return `<div class="sec-t">Playbook: pre-trade qualification</div>
@@ -125,10 +132,10 @@ function pbFormSection() {
       <div class="fgrid">
         <div class="f"><label>Market state (Gate 1)</label><select class="sel" data-pb="state"><option value="">—</option>${Object.entries(PB_STATES).map(([k, l]) => `<option value="${k}" ${p.state === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="f"><label>HTF auction setup · why</label><select class="sel" data-pb="htf">${pbOptions('htf', p.htf)}</select></div>
-        <div class="f"><label>Location · where (Gate 2)</label><select class="sel" data-pb="loc"><option value="">—</option>${[...new Set([...lib.loc, p.loc].filter(Boolean))].map(x => `<option ${p.loc === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
         <div class="f"><label>Level / zone</label><input class="inp" data-pb="level" value="${esc(p.level || '')}" placeholder="e.g. 5812.25–5814"></div>
+        <div class="f"><label>Objective / target reference</label><input class="inp" data-pb="objective" value="${esc(p.objective || '')}" placeholder="e.g. prior-day POC 5838"></div>
+        <div class="f span4"><label>Locations · where (Gate 2) <span class="faint" style="text-transform:none;letter-spacing:0">pick every reference the trade was framed on</span></label>${pbLocChips(pbLocs(p))}</div>
         <div class="f span4"><label>Execution triggers · when (Gate 3) <span class="faint" style="text-transform:none;letter-spacing:0">pick every one that printed</span></label>${pbTrigChips(pbTrigIds(p))}</div>
-        <div class="f span4"><label>Objective / target reference</label><input class="inp" data-pb="objective" value="${esc(p.objective || '')}" placeholder="e.g. prior-day POC 5838"></div>
         <div class="f span2"><label>Auction thesis (written before entry)</label><textarea class="inp" data-pb="thesis" rows="2" placeholder="Why the opportunity exists, before the trigger">${esc(p.thesis || '')}</textarea></div>
         <div class="f span2"><label>Trigger evidence (what actually printed)</label><textarea class="inp" data-pb="evidence" rows="2" placeholder="Timing, big trades, delta, DOM, footprint">${esc(p.evidence || '')}</textarea></div>
       </div>

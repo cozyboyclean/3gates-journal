@@ -1,4 +1,3 @@
-- Tag a trade with more than one execution trigger. The label reads like FA / ZPS + AR. A trade counts as Playbook only if every trigger on it is approved and paired with the setup.
-- Delete setups and triggers you no longer use. Set one to Deprecated in Settings → Playbook library and a Delete button appears. Trades already tagged with it keep the label, marked "(deleted)".
-- Model is retired. It's gone from the trade form, Trades filters, Edge Finder and Settings. Older trades still show it as "Legacy model" in the trade view, and it's still searchable. The dashboard and Executed vs backtest now group by HTF setup and setup / trigger instead.
-- Daily journal: new "What I did well this session" and "What I could have done better" boxes.
+- Tag a trade with more than one location. Locations are now chips in the Playbook section; tick every reference the trade was framed on (for example Prior-day VAL + Prior-day HVN).
+- Trades that already had a location keep it, and renaming a location in Settings updates every trade tagged with it.
+- Objective / target reference now sits next to Level / zone, to keep the form shorter.

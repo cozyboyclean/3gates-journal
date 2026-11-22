@@ -1,1 +1,4 @@
-- Fix: updates no longer stop with "3 Gates Trade Journal cannot be closed". Choosing Restart now closes the app cleanly (saving first), installs quietly and reopens the journal. If any part of the app is still running in the background, the installer ends it itself.
+- Layered entries: the trade form now has an Entries section, like Exits. Click "Add layered entry" for each limit fill (price, contracts, time).
+- The journal works out your average entry, total contracts and first fill time, so risk, R, fees and every stat use the real average.
+- The trade view shows each fill. The CSV export has a new "Entry fills" column.
+- Single-entry trades work exactly as before.

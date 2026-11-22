@@ -5,7 +5,7 @@ let F = null; // trade being edited
 function blankTrade(kind) {
   const s = S.settings; const now = new Date(); now.setSeconds(0, 0);
   const i0 = s.instruments[0] || { sym: 'ES', fee: 0 };
-  return { id: uid(), account: (G.account !== 'all' ? G.account : s.defaultAccount) || s.accounts[0].id, instrument: i0.sym, dir: 'long', entryTime: lt(now), entry: null, size: 1, stop: null, target: null, exits: [{ price: null, size: 1, time: lt(now) }], fees: i0.fee || 0, setup: s.setups[0] || '', mfe: null, mae: null, stats: {}, comments: { pre: [], entry: [], mgmt: [], exit: [] }, notes: '', shots: [], _feeAuto: true, ...(kind && kind !== 'live' ? { kind } : {}) };
+  return { id: uid(), account: (G.account !== 'all' ? G.account : s.defaultAccount) || s.accounts[0].id, instrument: i0.sym, dir: 'long', entryTime: lt(now), entry: null, size: 1, stop: null, target: null, exits: [{ price: null, size: 1, time: lt(now) }], fees: i0.fee || 0, setup: '', mfe: null, mae: null, stats: {}, comments: { pre: [], entry: [], mgmt: [], exit: [] }, notes: '', shots: [], _feeAuto: true, ...(kind && kind !== 'live' ? { kind } : {}) };
 }
 function shotSrc(s) { return s.file ? 'journal-media://m/' + encodeURIComponent(s.file) : s.id ? '/_blob/' + s.id : s.data; }
 const isVid = s => s.kind === 'video';
@@ -47,7 +47,6 @@ function drawForm() {
         <div class="f"${bookOf(F) === 'live' ? '' : ' hidden'}><label for="ff-account">Account</label><select class="sel" id="ff-account" data-f="account">${s.accounts.map(a => `<option value="${esc(a.id)}" ${F.account === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></div>
         <div class="f"><label for="ff-instrument">Instrument</label><select class="sel" id="ff-instrument" data-f="instrument">${[...new Set([...s.instruments.map(i => i.sym), F.instrument])].map(x => `<option ${F.instrument === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
         <div class="f"><label>Direction</label><div class="seg" style="width:100%"><button style="flex:1" class="${F.dir !== 'short' ? 'on' : ''}" data-dir="long">Long</button><button style="flex:1" class="${F.dir === 'short' ? 'on' : ''}" data-dir="short">Short</button></div></div>
-        <div class="f"><label for="ff-setup">Model</label><select class="sel" id="ff-setup" data-f="setup"><option value="">—</option>${[...new Set([...s.setups, F.setup].filter(Boolean))].map(x => `<option ${F.setup === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
         ${inp('entryTime', 'Entry time', 'datetime-local')}${inp('entry', 'Entry price')}${inp('size', 'Contracts')}${inp('fees', 'Commission & fees')}
         ${inp('stop', 'Initial stop')}${inp('target', 'Planned target')}${inp('mfe', 'Best price reached (MFE)')}${inp('mae', 'Worst price reached (MAE)')}
       </div>
@@ -158,12 +157,13 @@ function openDetail(id) {
   const cm = CATS.map(c => (t.comments?.[c] || []).length ? `<div><span class="lbl">${CAT[c]}</span><div class="chips" style="margin-top:4px">${t.comments[c].map(v => `<span class="chip on ${v.r > 0 ? 'cp' : 'cn'}">${v.r > 0 ? '+ ' : '− '}${esc(v.t)}</span>`).join('')}</div></div>` : '').join('');
   openDrawer(`<div class="mhead"><h3>${esc(t.instrument)} <span class="pill ${t.dir === 'short' ? 'short' : 'long'}">${t.dir === 'short' ? 'Short' : 'Long'}</span> <span class="pill ${x.res}">${x.res === 'OPEN' ? 'Open' : x.res}</span>${bookOf(t) !== 'live' ? ' ' + bookPill(t) : ''}</h3><button class="btn ghost" data-act="close-drawer">Close</button></div>
     <div class="dbody">
-      <div class="row between"><span class="muted">${fmtDate(t.entryTime, true)} · ${esc(t.setup || 'No setup')}</span><b class="num ${cls(x.pnl)}" style="font-size:22px">${x.closed ? fmtS$(x.pnl, 2) : 'Open'}</b></div>
+      <div class="row between"><span class="muted">${fmtDate(t.entryTime, true)} · ${esc(pbLabel(t) || 'Not classified')}</span><b class="num ${cls(x.pnl)}" style="font-size:22px">${x.closed ? fmtS$(x.pnl, 2) : 'Open'}</b></div>
       <div class="kv">
         <div><label>R multiple</label><b class="${cls(x.r)}">${fmtR(x.r)}</b></div><div><label>Planned R:R</label><b>${f2(x.planR)}</b></div><div><label>Risk</label><b>${fmt$(x.risk, 0)}</b></div>
         <div><label>Entry</label><b>${t.entry}</b></div><div><label>Avg exit</label><b>${isNum(x.avgExit) ? +x.avgExit.toFixed(4) : '—'}</b></div><div><label>Contracts</label><b>${x.size}</b></div>
         <div><label>Stop</label><b>${t.stop ?? '—'}</b></div><div><label>Target</label><b>${t.target ?? '—'}</b></div><div><label>Points</label><b class="${cls(x.pts)}">${isNum(x.pts) ? x.pts.toFixed(2) : '—'}</b></div>
         <div><label>MFE</label><b>${fmtR(x.mfeR)}</b></div><div><label>MAE</label><b>${isNum(x.maeR) ? '−' + x.maeR.toFixed(2) + 'R' : '—'}</b></div><div><label>Exit efficiency</label><b>${pct(x.eff, 0)}</b></div>
+        ${pbLabel(t) ? `<div><label>Setup / trigger</label><b>${esc(pbLabel(t))}</b></div>` : ''}${t.setup ? `<div><label>Legacy model</label><b style="font-family:var(--ui)">${esc(t.setup)}</b></div>` : ''}
         <div><label>Hold time</label><b>${fmtDur(x.dur)}</b></div><div><label>Fees</label><b>${fmt$(x.fees, 2)}</b></div><div><label>Account</label><b style="font-family:var(--ui)">${esc(S.settings.accounts.find(a => a.id === t.account)?.name || '—')}</b></div>
       </div>
       ${(t.exits || []).length > 1 ? `<div><span class="lbl">Exits</span><table style="margin-top:4px"><tbody>${t.exits.map(e => `<tr><td class="num">${e.price}</td><td class="num">${e.size} ct</td><td class="muted">${fmtDate(e.time, true)}</td></tr>`).join('')}</tbody></table></div>` : ''}
@@ -270,7 +270,7 @@ function exportCSV() {
   const st = S.settings.stats;
   const head = ['Type', 'Missed reason', 'Playbook status', 'Setup / trigger', 'HTF setup', 'Location', 'Level', 'Trigger', 'Market state', 'Gate 1', 'Gate 2', 'Gate 3', 'Evidence before entry', 'Thesis', 'Trigger evidence', 'Objective', 'Rule breaks', 'Entry time', 'Exit time', 'Account', 'Instrument', 'Direction', 'Contracts', 'Entry', 'Avg exit', 'Stop', 'Target', 'MFE price', 'MAE price', 'Fees', 'Net P&L', 'R', 'Setup', ...st.map(s => s.name), ...CATS.map(c => 'Comments ' + CAT[c]), 'Notes'];
   const q = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-  const rows = S.trades.slice().sort((a, b) => a._.ts - b._.ts).map(t => { const c = pbClassify(t), p = t.pb || {}; return [BOOKS[bookOf(t)], t.missReason || '', PB_CLASS[c.status][0], pbLabel(t), pbItem('htf', p.htf)?.name || '', p.loc || '', p.level || '', pbItem('trig', p.trig)?.name || '', PB_STATES[p.state] || '', p.g1 || '', p.g2 || '', p.g3 || '', p.pre || '', p.thesis || '', p.evidence || '', p.objective || '', c.reasons.join('; '), t.entryTime, (t.exits || []).map(e => e.time).sort().pop() || '', S.settings.accounts.find(a => a.id === t.account)?.name || '', t.instrument, t.dir, t._.size, t.entry, isNum(t._.avgExit) ? +t._.avgExit.toFixed(5) : '', t.stop ?? '', t.target ?? '', t.mfe ?? '', t.mae ?? '', t._.fees, isNum(t._.pnl) ? t._.pnl.toFixed(2) : '', isNum(t._.r) ? t._.r.toFixed(3) : '', t.setup || '', ...st.map(s => (t.stats?.[s.id] || []).join('; ')), ...CATS.map(c => (t.comments?.[c] || []).map(x => x.t).join('; ')), t.notes || ''].map(q).join(','); });
+  const rows = S.trades.slice().sort((a, b) => a._.ts - b._.ts).map(t => { const c = pbClassify(t), p = t.pb || {}; return [BOOKS[bookOf(t)], t.missReason || '', PB_CLASS[c.status][0], pbLabel(t), pbItem('htf', p.htf)?.name || '', p.loc || '', p.level || '', pbTrigIds(p).map(id => pbRef('trig', id).name).join(' + '), PB_STATES[p.state] || '', p.g1 || '', p.g2 || '', p.g3 || '', p.pre || '', p.thesis || '', p.evidence || '', p.objective || '', c.reasons.join('; '), t.entryTime, (t.exits || []).map(e => e.time).sort().pop() || '', S.settings.accounts.find(a => a.id === t.account)?.name || '', t.instrument, t.dir, t._.size, t.entry, isNum(t._.avgExit) ? +t._.avgExit.toFixed(5) : '', t.stop ?? '', t.target ?? '', t.mfe ?? '', t.mae ?? '', t._.fees, isNum(t._.pnl) ? t._.pnl.toFixed(2) : '', isNum(t._.r) ? t._.r.toFixed(3) : '', t.setup || '', ...st.map(s => (t.stats?.[s.id] || []).join('; ')), ...CATS.map(c => (t.comments?.[c] || []).map(x => x.t).join('; ')), t.notes || ''].map(q).join(','); });
   if (!rows.length) { toast('No trades to export yet'); return; }
   offerFile(`trades-${ymd(new Date())}.csv`, [head.map(q).join(','), ...rows].join('\n'));
 }
@@ -283,7 +283,7 @@ function goto(v) { S.view = v; closeDrawer(); try { history.replaceState(null, '
 function accEl(el) { const a = el.closest('[data-acc]'); return a && S.settings.accounts.find(x => x.id === a.dataset.acc); }
 
 document.addEventListener('click', async e => {
-  const el = e.target.closest('[data-act],[data-nav],[data-trade],[data-sub],[data-dir],[data-stat],[data-cmtpick],[data-delexit],[data-delshot],[data-zoom],[data-edit],[data-dup],[data-del],[data-simex],[data-cal],[data-day],[data-jd],[data-delinst],[data-delsetup],[data-delstat],[data-delval],[data-addval],[data-rate],[data-delcmt],[data-addcmt],[data-deltx],[data-scrim],[data-book],[data-miss],[data-delmissr],[data-pbset],[data-pbadd],[data-pbdelloc]');
+  const el = e.target.closest('[data-act],[data-nav],[data-trade],[data-sub],[data-dir],[data-stat],[data-cmtpick],[data-delexit],[data-delshot],[data-zoom],[data-edit],[data-dup],[data-del],[data-simex],[data-cal],[data-day],[data-jd],[data-delinst],[data-delsetup],[data-delstat],[data-delval],[data-addval],[data-rate],[data-delcmt],[data-addcmt],[data-deltx],[data-scrim],[data-book],[data-miss],[data-delmissr],[data-pbset],[data-pbadd],[data-pbdelloc],[data-pbtrig],[data-pbdel],[data-pbdelyes]');
   if (!el) return;
   const d = el.dataset;
   if (d.scrim) { if (e.target === el) discardForm(); return; }
@@ -299,6 +299,9 @@ document.addEventListener('click', async e => {
   if (d.trade) return openDetail(d.trade);
   if (d.sub) { const [k, v] = d.sub.split(':'); S.sub[k] = v; return render(); }
   if (d.pbset && F) { F.pb = Object.assign({}, F.pb, { [d.pbset]: d.val }); $$(`[data-pbset="${d.pbset}"]`).forEach(b => b.className = b.dataset.val === d.val ? 'on ' + d.val : ''); return updatePreview(); }
+  if (d.pbtrig && F) { const p = F.pb = Object.assign({}, F.pb); const ids = pbTrigIds(p).slice(); const i = ids.indexOf(d.pbtrig); if (i >= 0) ids.splice(i, 1); else ids.push(d.pbtrig); delete p.trig; if (ids.length) p.trigs = ids; else delete p.trigs; el.classList.toggle('on'); return updatePreview(); }
+  if (d.pbdel) { S.sub.pbdel = d.pbdel; return render(); }
+  if (d.pbdelyes) { const [k, id] = d.pbdelyes.split(':'); pbDelete(k, id); S.sub.pbdel = null; saveSettings(); toast('Deleted'); return render(); }
   if (d.pbadd) { const k = d.pbadd; const code = $(`#pbnew-${k}-code`).value.trim(), name = $(`#pbnew-${k}-name`).value.trim(); if (!code || !name) return toast('Give it a code and a name'); pbLib()[k].push({ id: (k === 'htf' ? 'htf_' : 'trg_') + uid(), code, name, status: 'candidate', def: '' }); saveSettings(); return render(); }
   if (d.pbdelloc != null) { pbLib().loc.splice(+d.pbdelloc, 1); saveSettings(); return render(); }
   if (d.book && F && !d.act) { F.kind = d.book === 'live' ? undefined : d.book; return drawFormKeepScroll(); }
@@ -333,6 +336,7 @@ document.addEventListener('click', async e => {
     case 'copybox': { const ta = $('#copybox'); try { await navigator.clipboard.writeText(ta.value); toast('Copied'); } catch (_) { ta.select(); toast('Selected — press Ctrl/Cmd+C'); } return; }
     case 'new-trade': return openTradeForm(null);
     case 'pb-add-loc': { const v = $('#pbnew-loc').value.trim(); if (v && !pbLib().loc.includes(v)) { pbLib().loc.push(v); saveSettings(); render(); } return; }
+    case 'pb-del-no': S.sub.pbdel = null; return render();
     case 'pb-review-queue': TF.pb = 'unreviewed'; return goto('trades');
     case 'new-missed': return openTradeForm(null, 'missed');
     case 'new-bt': return openTradeForm(null, 'bt');

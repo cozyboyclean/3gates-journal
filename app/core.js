@@ -213,7 +213,6 @@ const closedScoped = o => scoped(o).filter(t => t._.closed);
 function hourLabel(h) { return h == null ? '—' : `${pad(h)}:00`; }
 function dims() {
   const d = [
-    { id: 'setup', name: 'Model', fn: t => t.setup || '(no model)' },
     ...(typeof pbDims === 'function' ? pbDims() : []),
     { id: 'dir', name: 'Direction', fn: t => t.dir === 'short' ? 'Short' : 'Long' },
     { id: 'inst', name: 'Instrument', fn: t => t.instrument || '—' },
@@ -294,7 +293,7 @@ function genDemo(o) {
           id: 'demo' + (o.kind || '') + out.length, demo: true, account: 'acc_main', instrument: 'ES', dir,
           entryTime: lt(st), entry, size, stop: entry - sg * stopPts, target: entry + sg * tgtR * stopPts,
           exits: [{ price: Math.round(exitPx * 4) / 4, size, time: lt(et) }],
-          fees: +(size * 4.5).toFixed(2), setup,
+          fees: +(size * 4.5).toFixed(2), setup: '',
           mfe: Math.round((entry + sg * mfeR * stopPts) * 4) / 4, mae: Math.round((entry - sg * maeR * stopPts) * 4) / 4,
           stats: {
             mist, emo: [win ? pick(['Calm', 'Confident', 'Calm']) : pick(['Calm', 'Anxious', 'Hesitant', 'Frustrated'])],
@@ -304,6 +303,8 @@ function genDemo(o) {
           },
           comments: o.kind ? { pre: [], entry: [], mgmt: [], exit: [] } : cm, notes: '', shots: []
         };
+        { const tg = [pick(['trg_zps', 'trg_ar', 'trg_tc'])]; if (rnd() < 0.25 && !tg.includes('trg_tc')) tg.push('trg_tc');
+          t.pb = { state: m1 ? 'imbalance' : 'balance', htf: m1 ? 'htf_ic' : 'htf_vre', loc: m1 ? 'LVN' : 'Prior-day VAL', trigs: tg, g1: 'yes', g2: rnd() < 0.85 ? 'yes' : 'no', g3: win || rnd() < 0.7 ? 'yes' : 'no', pre: rnd() < 0.8 ? 'yes' : 'unknown' }; }
         if (o.kind) { t.kind = o.kind; t.stats.mist = ['None']; delete t.stats.emo; }
         if (o.kind === 'missed') t.missReason = pick(['Hesitated', 'Hesitated', 'Doubted the setup', 'Away from screen', "Didn't see it in time"]);
         out.push(calc(t));

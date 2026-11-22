@@ -1,6 +1,4 @@
-- Each trade now has a Playbook section: market state, HTF auction setup (why), location (where), execution trigger (when), level, objective, thesis and trigger evidence, plus Yes / No / Unknown for Gate 1, Gate 2, Gate 3 and "evidence captured before entry".
-- Trades show a compact label like FA / ZPS and a status: Playbook, Off-playbook, Research, Undetermined or Not classified. The status comes from your rules only, never from P&L.
-- New Settings → Playbook library: your HTF setups, triggers and locations, each Approved, Research candidate or Deprecated, plus a grid of approved setup × trigger pairs. FA, VRE and IC (setups) and ZPS, AR and TC (triggers) start as research candidates. Nothing is approved until you approve it.
-- New Analytics → Playbook tab: compliance rate, playbook vs off-playbook results, most common rule breaks, and results by setup, trigger, pair and market state, with small-sample warnings.
-- Edge Finder and the Simulator can now group by HTF setup, trigger, pair, location, market state and playbook status. The Trades list can filter by playbook status, and "Not classified" works as a review queue.
-- Your existing trades and your original Setup list (now called Models) are unchanged. Old trades show "Not classified" until you review them.
+- Tag a trade with more than one execution trigger. The label reads like FA / ZPS + AR. A trade counts as Playbook only if every trigger on it is approved and paired with the setup.
+- Delete setups and triggers you no longer use. Set one to Deprecated in Settings → Playbook library and a Delete button appears. Trades already tagged with it keep the label, marked "(deleted)".
+- Model is retired. It's gone from the trade form, Trades filters, Edge Finder and Settings. Older trades still show it as "Legacy model" in the trade view, and it's still searchable. The dashboard and Executed vs backtest now group by HTF setup and setup / trigger instead.
+- Daily journal: new "What I did well this session" and "What I could have done better" boxes.

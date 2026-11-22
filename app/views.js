@@ -77,7 +77,7 @@ VIEWS.dashboard = {
     const L = closedScoped(); const m = metrics(L);
     if (!L.length) return noData('No closed trades in this range yet. Add a trade or widen the date range.');
     const recent = [...L].reverse().slice(0, 8);
-    const setups = setupBreak(L, 'setup');
+    const setups = setupBreak(L, 'pb_htf');
     const longM = metrics(L.filter(t => t.dir !== 'short')), shortM = metrics(L.filter(t => t.dir === 'short'));
     return `
     <div class="kpis">
@@ -96,7 +96,7 @@ VIEWS.dashboard = {
     </div>
     <div class="grid g3">
       <div class="panel"><h2>Daily P&L <small>last 30 sessions</small></h2><div class="chart short"><canvas id="c-daily"></canvas></div></div>
-      <div class="panel"><h2>By setup</h2>${miniTable(setups)}</div>
+      <div class="panel"><h2>By HTF setup</h2>${miniTable(setups)}</div>
       <div class="panel"><h2>Long vs short</h2>
         <table><thead><tr><th></th><th class="r">Trades</th><th class="r">Win %</th><th class="r">Exp.</th><th class="r">Net</th></tr></thead><tbody>
         <tr><td><span class="pill long">Long</span></td><td class="r num">${longM.n}</td><td class="r num">${pct(longM.wr, 0)}</td><td class="r num ${cls(longM.expR)}">${fmtR(longM.expR)}</td><td class="r num ${cls(longM.net)}">${fmtS$(longM.net)}</td></tr>
@@ -139,7 +139,7 @@ function tradeTable(list, compact, showBook) {
   if (!list.length) return '<div class="empty">No trades match.</div>';
   return `<div class="tbl-wrap"><table><thead><tr><th>Date</th>${showBook ? '<th>Type</th>' : ''}<th>Instr.</th><th>Side</th>${compact ? '' : '<th>Setup / trigger</th><th>Playbook</th>'}<th class="r">Size</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">P&L</th><th class="r">R</th>${compact ? '' : `<th class="r">Hold</th><th>${showBook ? 'Mistakes / why missed' : 'Mistakes'}</th>`}${showBook ? '' : '<th>Tilt</th>'}<th>Result</th></tr></thead><tbody>
   ${list.map(t => `<tr class="click" data-trade="${esc(t.id)}"><td>${fmtDate(t.entryTime, true)}</td>${showBook ? `<td>${bookPill(t)}</td>` : ''}<td><b>${esc(t.instrument)}</b></td><td><span class="pill ${t.dir === 'short' ? 'short' : 'long'}">${t.dir === 'short' ? 'Short' : 'Long'}</span></td>
-    ${compact ? '' : `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${pbLabel(t) ? `<b class="mono">${esc(pbLabel(t))}</b>${t.setup ? `<br><span class="faint" style="font-size:11.5px">${esc(t.setup)}</span>` : ''}` : esc(t.setup || '—')}</td><td>${pbPill(t)}</td>`}
+    ${compact ? '' : `<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${pbLabel(t) ? `<b class="mono">${esc(pbLabel(t))}</b>` : t.setup ? `<span class="faint" title="Legacy model">${esc(t.setup)}</span>` : '<span class="faint">—</span>'}</td><td>${pbPill(t)}</td>`}
     <td class="r num">${t._.size || '—'}</td><td class="r num">${isNum(t.entry) ? t.entry : '—'}</td><td class="r num">${isNum(t._.avgExit) ? +t._.avgExit.toFixed(4) : '—'}</td>
     <td class="r num ${cls(t._.pnl)}">${t._.closed ? fmtS$(t._.pnl, 2) : 'open'}</td><td class="r num ${cls(t._.r)}">${fmtR(t._.r)}</td>
     ${compact ? '' : `<td class="r num">${fmtDur(t._.dur)}</td><td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(bookOf(t) === 'missed' ? (t.missReason || '') : (t.stats?.mist || []).filter(x => x !== 'None').join(', ') || '')}</td>`}
@@ -167,7 +167,6 @@ VIEWS.trades = {
         <div class="row">
           <input class="inp" id="tf-q" placeholder="Search notes, tags, comments" value="${esc(TF.q)}" style="width:230px">
           <select class="sel" id="tf-pb"><option value="">Any playbook status</option>${Object.entries(PB_CLASS).map(([k, v]) => `<option value="${k}" ${TF.pb === k ? 'selected' : ''}>${v[0]}</option>`).join('')}</select>
-          <select class="sel" id="tf-setup"><option value="">All models</option>${S.settings.setups.map(s => `<option ${TF.setup === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
           <select class="sel" id="tf-inst"><option value="">All instruments</option>${insts.map(s => `<option ${TF.inst === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>
           <select class="sel" id="tf-dir"><option value="">Long & short</option><option value="long" ${TF.dir === 'long' ? 'selected' : ''}>Long</option><option value="short" ${TF.dir === 'short' ? 'selected' : ''}>Short</option></select>
           <select class="sel" id="tf-res"><option value="">All results</option>${[['W', 'Winners'], ['L', 'Losers'], ['BE', 'Break-even'], ['OPEN', 'Open']].map(([v, l]) => `<option value="${v}" ${TF.res === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
@@ -348,12 +347,12 @@ VIEWS.edge = {
     const base = metrics(L);
     const top = all.filter(x => x.m.expR > base.expR).slice(0, 5), bot = all.filter(x => x.m.expR < base.expR).slice(-5).reverse();
     const card = (x) => `<tr><td style="white-space:normal"><span class="faint" style="font-size:11.5px">${esc(x.d.name)}</span><br><b>${esc(x.k)}</b></td><td class="r num">${x.m.n}</td><td class="r num">${pct(x.m.wr, 0)}</td><td class="r num ${cls(x.m.expR)}">${fmtR(x.m.expR)}</td><td class="r num ${cls(x.m.net)}">${fmtS$(x.m.net)}</td></tr>`;
-    const sel = S.sub.edgeDim || 'setup';
+    const sel = S.sub.edgeDim || 'pb_htf';
     const dim = D.find(d => d.id === sel) || D[0];
     const g = groupBy(L, dim.fn);
     const rows = dimOrder(dim, [...g.keys()]).map(k => ({ k, m: metrics(g.get(k)) }));
     const maxAbs = Math.max(0.5, ...rows.map(r => Math.abs(r.m.expR || 0)));
-    const rx = S.sub.rx || 'setup', ry = S.sub.ry || (D.find(d => d.stat) || D[1]).id;
+    const rx = S.sub.rx || 'pb_htf', ry = S.sub.ry || 'pb_trig';
     return `<div class="banner"><span>Your baseline: <b class="num ${cls(base.expR)}">${fmtR(base.expR)}</b> expectancy over <b>${base.n}</b> trades. Edge Finder ranks every setup, tag and comment against it.</span>
       <label class="row" style="gap:6px"><span class="muted">Min. trades</span><input class="inp num" type="number" min="1" id="minN" value="${minN}" style="width:70px"></label></div>
     <div class="grid g2">
@@ -413,7 +412,7 @@ VIEWS.tilt = {
 };
 
 /* ---------- Simulator ---------- */
-const SIM = { ex: [], target: '', stop: '', cap: '', worst: '', best: '', perDay: '', dayStop: '', dim: 'setup' };
+const SIM = { ex: [], target: '', stop: '', cap: '', worst: '', best: '', perDay: '', dayStop: '', dim: 'pb_htf' };
 function simulate(L, o) {
   const D = dims(); const ex = new Set(o.ex);
   let rows = L.filter(t => !D.some(d => { const v = d.fn(t); return (Array.isArray(v) ? v : [v]).some(k => ex.has(d.id + '::' + k)); }))
@@ -502,7 +501,7 @@ VIEWS.calendar = {
         const d = new Date(start); d.setDate(start.getDate() + w * 7 + i); const k = ymd(d); const ts = byDay.get(k) || []; const p = sum(ts.map(t => t._.pnl));
         if (d.getMonth() === mo - 1) any = true;
         wk += p; wn += ts.length; const j = S.journal[k];
-        cells += `<div class="day ${d.getMonth() !== mo - 1 ? 'out' : ''} ${k === today ? 'today' : ''} ${ts.length ? (p >= 0 ? 'w' : 'l') : ''}" data-day="${k}"><div class="dn"><span>${d.getDate()}</span>${j && (j.plan || j.review) ? '<span title="Journal entry">✎</span>' : ''}</div>${ts.length ? `<div class="p ${cls(p)}">${fmtS$(p)}</div><div class="c">${ts.length} trade${ts.length > 1 ? 's' : ''} · ${fmtR(sum(ts.map(t => t._.r).filter(isNum)))}</div>` : ''}</div>`;
+        cells += `<div class="day ${d.getMonth() !== mo - 1 ? 'out' : ''} ${k === today ? 'today' : ''} ${ts.length ? (p >= 0 ? 'w' : 'l') : ''}" data-day="${k}"><div class="dn"><span>${d.getDate()}</span>${j && (j.plan || j.review || j.right || j.better) ? '<span title="Journal entry">✎</span>' : ''}</div>${ts.length ? `<div class="p ${cls(p)}">${fmtS$(p)}</div><div class="c">${ts.length} trade${ts.length > 1 ? 's' : ''} · ${fmtR(sum(ts.map(t => t._.r).filter(isNum)))}</div>` : ''}</div>`;
       }
       cells += `<div class="wk"><span class="lbl">Week ${w + 1}</span><span class="p ${cls(wk)}">${wn ? fmtS$(wk) : '—'}</span><span class="faint" style="font-size:11px">${wn} trades</span></div>`;
     }
@@ -528,7 +527,7 @@ VIEWS.diary = {
     const moods = ['Calm', 'Focused', 'Tired', 'Anxious', 'Frustrated', 'Overconfident'];
     return `<div class="jl">
       <div class="panel" style="padding:10px"><div class="row" style="padding:4px 4px 10px"><input class="inp" type="date" id="jd-pick" value="${date}" style="flex:1"></div>
-        <div class="jlist">${keys.slice(0, 120).map(k => { const dts = scoped({ noRange: true }).filter(t => t._.date === k && t._.closed); const p = sum(dts.map(t => t._.pnl)); const has = S.journal[k] && (S.journal[k].plan || S.journal[k].review); return `<button class="jitem ${k === date ? 'on' : ''}" data-jd="${k}"><span>${fmtDay(k)}<br><small>${has ? 'Journal written' : 'No entry'}${dts.length ? ' · ' + dts.length + ' trades' : ''}</small></span><b class="num ${cls(p)}" style="font-size:12.5px">${dts.length ? fmtS$(p) : ''}</b></button>`; }).join('')}</div></div>
+        <div class="jlist">${keys.slice(0, 120).map(k => { const dts = scoped({ noRange: true }).filter(t => t._.date === k && t._.closed); const p = sum(dts.map(t => t._.pnl)); const has = S.journal[k] && (S.journal[k].plan || S.journal[k].review || S.journal[k].right || S.journal[k].better); return `<button class="jitem ${k === date ? 'on' : ''}" data-jd="${k}"><span>${fmtDay(k)}<br><small>${has ? 'Journal written' : 'No entry'}${dts.length ? ' · ' + dts.length + ' trades' : ''}</small></span><b class="num ${cls(p)}" style="font-size:12.5px">${dts.length ? fmtS$(p) : ''}</b></button>`; }).join('')}</div></div>
       <div class="stack" style="gap:16px">
         <div class="panel stack">
           <div class="row between"><h2 style="margin:0">${fmtDay(date)}, ${date.slice(0, 4)}</h2><span class="hint" id="jsaved">${S.journal[date] ? 'Saved' : 'Not written yet'}</span></div>
@@ -539,6 +538,10 @@ VIEWS.diary = {
           </div>
           <div class="f"><label>Pre-market plan</label><textarea class="inp" data-j="plan" placeholder="Bias, key levels, invalidation, max trades, risk">${esc(j.plan || '')}</textarea></div>
           <div class="f"><label>Post-session review</label><textarea class="inp" data-j="review" placeholder="What happened, what you did well, where you deviated">${esc(j.review || '')}</textarea></div>
+          <div class="grid g2">
+            <div class="f"><label>What I did well this session</label><textarea class="inp" data-j="right" placeholder="Rules followed, good reads, patience, clean execution">${esc(j.right || '')}</textarea></div>
+            <div class="f"><label>What I could have done better</label><textarea class="inp" data-j="better" placeholder="Deviations, hesitation, early exits, what to change">${esc(j.better || '')}</textarea></div>
+          </div>
           <div class="f"><label>Lesson / rule for tomorrow</label><textarea class="inp" data-j="lesson" style="min-height:56px">${esc(j.lesson || '')}</textarea></div>
         </div>
         <div class="panel"><h2>Trades this day <small>${ts.length ? `${fmtS$(m.net)} · ${fmtR(m.totalR)}` : ''}</small></h2>${ts.length ? tradeTable(ts, true) : '<p class="muted">No trades logged for this day.</p>'}</div>
@@ -588,10 +591,7 @@ VIEWS.config = {
           <div class="f"><label>Currency symbol</label><input class="inp" id="cfg-cur" value="${esc(s.currency)}" maxlength="3"></div>
           <div class="f"><label>Break-even band (±R)</label><input class="inp num" type="number" step="0.01" min="0" id="cfg-be" value="${s.beR}"></div>
         </div></div>
-      <div class="panel stack"><h2>Models <small>your original setup list, kept as is</small></h2>
-        <div class="ed-list">${s.setups.map((x, n) => `<div class="ed-row"><input class="inp" data-setup="${n}" value="${esc(x)}"><button class="btn sm ghost" data-delsetup="${n}">Remove</button></div>`).join('')}</div>
-        <div class="row"><input class="inp" id="new-setup" placeholder="New setup name" style="flex:1"><button class="btn sm" data-act="add-setup">Add</button></div>
-        <h2 style="margin-top:12px">Reasons for missed trades</h2>
+      <div class="panel stack"><h2>Reasons for missed trades</h2>
         <div class="ed-list">${s.missReasons.map((x, n) => `<div class="ed-row"><input class="inp" data-missr="${n}" value="${esc(x)}"><button class="btn sm ghost" data-delmissr="${n}">Remove</button></div>`).join('')}</div>
         <div class="row"><input class="inp" id="new-missr" placeholder="New reason" style="flex:1"><button class="btn sm" data-act="add-missr">Add</button></div></div>
     </div>
@@ -672,9 +672,9 @@ VIEWS.gap = {
       ['Expectancy', m => fmtR(m.expR), m => m.expR], ['Profit factor', m => m.pf === Infinity ? '∞' : f2(m.pf)], ['Total R', m => fmtR(m.totalR), m => m.totalR], ['Max drawdown (R)', m => fmtR(m.rdd)],
       ['Avg planned R:R', m => f2(m.planR)], ['Avg MFE', m => fmtR(m.mfe)], ['Exit efficiency', m => pct(m.eff, 0)], ['Avg hold, winners', m => fmtDur(m.holdW)], ['Avg hold, losers', m => fmtDur(m.holdL)],
     ];
-    const setups = [...new Set([...E, ...B].map(t => t.setup || '(no setup)'))];
-    const sorder = S.settings.setups; setups.sort((a, b) => (sorder.indexOf(a) + 1 || 99) - (sorder.indexOf(b) + 1 || 99));
-    const srow = s => { const e = metrics(E.filter(t => (t.setup || '(no setup)') === s)), b = metrics(B.filter(t => (t.setup || '(no setup)') === s)); const g = isNum(e.expR) && isNum(b.expR) ? e.expR - b.expR : null; return `<tr><td style="white-space:normal"><b>${esc(s)}</b></td><td class="r num">${e.n}</td><td class="r num">${pct(e.wr, 0)}</td><td class="r num ${cls(e.expR)}">${fmtR(e.expR)}</td><td class="r num">${b.n}</td><td class="r num">${pct(b.wr, 0)}</td><td class="r num ${cls(b.expR)}">${fmtR(b.expR)}</td><td class="r num ${cls(g)}">${g == null ? '—' : fmtR(g)}</td></tr>`; };
+    const grp = t => pbLabel(t) || 'Not classified';
+    const setups = [...new Set([...E, ...B].map(grp))].sort((a, b) => (a === 'Not classified') - (b === 'Not classified') || a.localeCompare(b));
+    const srow = s => { const e = metrics(E.filter(t => grp(t) === s)), b = metrics(B.filter(t => grp(t) === s)); const g = isNum(e.expR) && isNum(b.expR) ? e.expR - b.expR : null; return `<tr><td style="white-space:normal"><b>${esc(s)}</b></td><td class="r num">${e.n}</td><td class="r num">${pct(e.wr, 0)}</td><td class="r num ${cls(e.expR)}">${fmtR(e.expR)}</td><td class="r num">${b.n}</td><td class="r num">${pct(b.wr, 0)}</td><td class="r num ${cls(b.expR)}">${fmtR(b.expR)}</td><td class="r num ${cls(g)}">${g == null ? '—' : fmtR(g)}</td></tr>`; };
     return `<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
         ${kpi('Execution gap', gap == null ? '—' : fmtR(gap), 'live expectancy minus backtest, per trade', cls(gap))}
         ${kpi('Per 100 trades', gap == null ? '—' : fmtR(gap * 100), 'what the gap adds up to', cls(gap))}
@@ -689,10 +689,10 @@ VIEWS.gap = {
         <div class="panel"><h2>Cumulative R <small>by trade number</small></h2><div class="chart tall"><canvas id="c-gap"></canvas></div></div>
       </div>
       <div class="grid g2">
-        <div class="panel"><h2>By setup <small>executed vs backtest</small></h2><div class="tbl-wrap"><table><thead><tr><th>Setup</th><th class="r">Live n</th><th class="r">Live win</th><th class="r">Live exp.</th><th class="r">BT n</th><th class="r">BT win</th><th class="r">BT exp.</th><th class="r">Gap</th></tr></thead><tbody>${setups.map(srow).join('')}</tbody></table></div></div>
+        <div class="panel"><h2>By setup / trigger <small>executed vs backtest</small></h2><div class="tbl-wrap"><table><thead><tr><th>Setup / trigger</th><th class="r">Live n</th><th class="r">Live win</th><th class="r">Live exp.</th><th class="r">BT n</th><th class="r">BT win</th><th class="r">BT exp.</th><th class="r">Gap</th></tr></thead><tbody>${setups.map(srow).join('')}</tbody></table></div></div>
         <div class="panel"><h2>Missed trades by reason</h2>${missReasonTable(M)}</div>
       </div>
-      <div class="panel"><h2>Expectancy by setup</h2><div class="chart"><canvas id="c-gapsetup"></canvas></div></div>`;
+      <div class="panel"><h2>Expectancy by setup / trigger</h2><div class="chart"><canvas id="c-gapsetup"></canvas></div></div>`;
   },
   after() {
     const E = closedScoped({ book: 'live' }), B = closedScoped({ book: 'bt' }), M = closedScoped({ book: 'missed' });
@@ -701,9 +701,9 @@ VIEWS.gap = {
     const sets = [['Executed', cum(E), T('accent')], ['Backtest', cum(B), T('pos')], ['Executed + missed', cum([...E, ...M].sort((a, b) => a._.ts - b._.ts)), T('warn')]].filter(s => s[1].length);
     const n = Math.max(...sets.map(s => s[1].length));
     mkChart('c-gap', { type: 'line', data: { labels: Array.from({ length: n }, (_, i) => i + 1), datasets: sets.map(([l, d, c], i) => ({ label: l, data: d, borderColor: c, borderWidth: 2, pointRadius: 0, tension: .15, borderDash: i === 2 ? [5, 4] : [] })) }, options: { plugins: { legend: { display: true } }, scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { ticks: { callback: v => v + 'R' } } } } });
-    const setups = [...new Set([...E, ...B].map(t => t.setup || '(no setup)'))];
-    const so = S.settings.setups; setups.sort((a, b) => (so.indexOf(a) + 1 || 99) - (so.indexOf(b) + 1 || 99));
-    const ex = (L, s) => metrics(L.filter(t => (t.setup || '(no setup)') === s)).expR ?? 0;
+    const grp = t => pbLabel(t) || 'Not classified';
+    const setups = [...new Set([...E, ...B].map(grp))].sort((a, b) => (a === 'Not classified') - (b === 'Not classified') || a.localeCompare(b));
+    const ex = (L, s) => metrics(L.filter(t => grp(t) === s)).expR ?? 0;
     mkChart('c-gapsetup', { type: 'bar', data: { labels: setups, datasets: [{ label: 'Executed', data: setups.map(s => ex(E, s)), backgroundColor: T('accent'), borderRadius: 3 }, { label: 'Backtest', data: setups.map(s => ex(B, s)), backgroundColor: T('pos'), borderRadius: 3 }] }, options: { plugins: { legend: { display: true } }, scales: { x: { grid: { display: false } }, y: { ticks: { callback: v => (+v).toFixed(1) + 'R' } } } } });
   }
 };

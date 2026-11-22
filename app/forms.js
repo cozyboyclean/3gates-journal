@@ -392,6 +392,12 @@ document.addEventListener('click', async e => {
     case 'export-csv': return exportCSV();
     case 'export-json': return exportJSON();
     case 'open-data': return DESK && DESK.openDataFolder();
+    case 'stor-media': if (DESK && DESK.storage) { STOR = await DESK.storage.pickMedia(); drawStorage(); } return;
+    case 'stor-pick-backup': if (DESK && DESK.storage) { STOR = await DESK.storage.pickBackup(); drawStorage(); } return;
+    case 'stor-backup': if (DESK && DESK.storage) { STOR = await DESK.storage.backupNow(); drawStorage(); } return;
+    case 'stor-stop': if (DESK && DESK.storage) { STOR = await DESK.storage.stopBackup(); drawStorage(); } return;
+    case 'stor-open-media': return DESK && DESK.storage && DESK.storage.open('media');
+    case 'stor-open-backup': return DESK && DESK.storage && DESK.storage.open('backup');
     case 'sim-reset': Object.assign(SIM, { ex: [], target: '', stop: '', cap: '', worst: '', best: '', perDay: '', dayStop: '' }); return render();
     case 'add-account': { const id = 'acc_' + uid(); s.accounts.push({ id, name: 'New account', broker: '', start: 50000, txns: [] }); saveSettings(); return render(); }
     case 'default-acc': s.defaultAccount = accEl(el).id; saveSettings(); return render();

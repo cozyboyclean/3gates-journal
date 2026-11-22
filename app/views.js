@@ -607,10 +607,51 @@ VIEWS.config = {
       <div class="row"><button class="btn" data-act="export-json">Export full backup (JSON)</button><button class="btn" data-act="export-csv">Export trades (CSV)</button><label class="btn">Restore backup<input type="file" accept=".json,application/json" id="restore-json" hidden></label><button class="btn" data-act="import-csv">Import trades (CSV)</button></div>
       <p class="hint">${Store.mode === 'db' ? 'Your journal is stored privately in your Claude account and syncs across your devices. Nobody you share this page with can see it.' : (DESK ? 'Your journal is saved on this PC. A dated backup copy is kept automatically each day (last 30 days).' : 'Your journal is stored in this browser only. Export a backup regularly.')}</p>
       ${DESK ? `<div><button class="btn" data-act="open-data">Open data folder</button></div>` : ''}
+    </div>
+    ${DESK && DESK.storage ? `<div class="panel stack"><h2>Storage &amp; backup</h2><div id="stor-box">${storageHTML()}</div></div>` : ''}
+    <div class="panel stack"><h2>Danger zone</h2>
       ${S.sub.wipe ? `<div class="confirm">Delete all ${S.trades.length} trades and every journal entry? This cannot be undone. <button class="btn sm danger" data-act="wipe-yes">Delete everything</button><button class="btn sm" data-act="wipe-no">Cancel</button></div>` : `<div><button class="btn danger" data-act="wipe">Delete all trades…</button></div>`}
     </div>`;
   }
 };
+
+/* ---------- desktop storage & backup (Settings) ---------- */
+let STOR = null;
+function agoText(iso) {
+  if (!iso) return 'never';
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 1) return 'just now'; if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = Math.round(h / 24); return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+function storageHTML() {
+  const i = STOR;
+  if (!i) return '<p class="hint">Loading…</p>';
+  const prog = i.progress && i.progress.total ? ` ${i.progress.done} of ${i.progress.total}` : '';
+  const drive = i.backupDir ? i.backupDir.slice(0, 2) : '';
+  const stale = i.backupDir && (!i.lastBackup || Date.now() - Date.parse(i.lastBackup) > 7 * 864e5);
+  return `<div class="stack">
+    <div class="stack" style="gap:6px"><span class="lbl">Screenshots &amp; clips folder</span>
+      <div class="mono" style="font-size:12.5px;word-break:break-all">${esc(i.mediaDir)}</div>
+      <p class="hint">${i.busy === 'moving' ? `Moving your clips…${prog}. Keep the app open.` : 'Pick a roomy drive that stays connected, like D:. Existing clips are moved there for you and keep showing on your trades.'}</p>
+      <div class="row"><button class="btn" data-act="stor-media" ${i.busy ? 'disabled' : ''}>Change folder…</button><button class="btn ghost" data-act="stor-open-media">Open folder</button></div></div>
+    <div class="stack" style="gap:6px"><span class="lbl">Backup drive</span>
+      ${i.backupDir ? `<div class="mono" style="font-size:12.5px;word-break:break-all">${esc(i.backupDir)}</div>
+        <p class="hint"><b>${i.backupThere ? `${esc(drive)} is connected` : `${esc(drive)} is not connected`}</b> · last backup ${agoText(i.lastBackup)}${i.lastBackup && i.lastBackupFiles ? ` · ${i.lastBackupFiles} clip${i.lastBackupFiles === 1 ? '' : 's'}` : ''}${i.busy === 'backup' ? ` · backing up…${prog}` : ''}</p>
+        ${stale && !i.backupThere ? `<p class="hint" style="color:var(--neg)">Plug in ${esc(drive)} to back up. It starts on its own.</p>` : ''}
+        <p class="hint">Whenever this drive is plugged in, your trades and any new clips are copied to it automatically (and every 12 hours while it stays connected). Clips you delete in the journal are kept on the backup.</p>
+        <div class="row"><button class="btn" data-act="stor-backup" ${i.busy || !i.backupThere ? 'disabled' : ''}>Back up now</button><button class="btn ghost" data-act="stor-open-backup" ${i.backupThere ? '' : 'disabled'}>Open backup</button><button class="btn ghost" data-act="stor-pick-backup" ${i.busy ? 'disabled' : ''}>Change…</button><button class="btn ghost" data-act="stor-stop">Turn off</button></div>`
+      : `<p class="hint">Choose your external drive (for example your My Passport). It doesn't need to stay plugged in: the journal backs up each time it sees the drive, and reminds you if a week goes by without one.</p>
+        <div><button class="btn pri" data-act="stor-pick-backup" ${i.busy ? 'disabled' : ''}>Choose backup drive…</button></div>`}
+      ${i.lastError ? `<p class="hint" style="color:var(--neg)">${esc(i.lastError)}</p>` : ''}</div>
+  </div>`;
+}
+function drawStorage() { const b = document.getElementById('stor-box'); if (b) b.innerHTML = storageHTML(); }
+if (DESK && DESK.storage) {
+  DESK.storage.get().then(i => { STOR = i; drawStorage(); }).catch(() => { });
+  DESK.storage.onChange((i, msg) => { STOR = i; drawStorage(); if (msg) toast(msg); });
+  setInterval(drawStorage, 60000);
+}
 
 /* ---------- Backtest & missed trades ---------- */
 function missReasonRows(list) {

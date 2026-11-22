@@ -1,4 +1,5 @@
-- Layered entries: the trade form now has an Entries section, like Exits. Click "Add layered entry" for each limit fill (price, contracts, time).
-- The journal works out your average entry, total contracts and first fill time, so risk, R, fees and every stat use the real average.
-- The trade view shows each fill. The CSV export has a new "Entry fills" column.
-- Single-entry trades work exactly as before.
+- New in Settings → Storage & backup: choose where your screenshots and clips are kept. Pick a folder on your D: drive and the journal moves your existing clips there for you. They keep showing on your trades.
+- Backup drive: choose your My Passport once. Every time you plug it in, the journal copies your trades and any new clips to it on its own. If it stays plugged in, it backs up again every 12 hours.
+- If a week goes by without a backup, the journal reminds you to plug the drive in.
+- Clips you delete in the journal stay on the backup, so a mistake can't wipe your only copy.
+- File menu: new "Open clips folder" and "Back up now".

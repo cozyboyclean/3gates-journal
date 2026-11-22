@@ -8,5 +8,14 @@ contextBridge.exposeInMainWorld('desktop', {
   openDataFolder: () => ipcRenderer.invoke('folder:open'),
   pathFor: file => { try { return webUtils.getPathForFile(file) || ''; } catch (e) { return ''; } },
   addMedia: src => ipcRenderer.invoke('media:add', src),
-  deleteMedia: files => ipcRenderer.invoke('media:delete', files)
+  deleteMedia: files => ipcRenderer.invoke('media:delete', files),
+  storage: {
+    get: () => ipcRenderer.invoke('storage:get'),
+    pickMedia: () => ipcRenderer.invoke('storage:pickMedia'),
+    pickBackup: () => ipcRenderer.invoke('storage:pickBackup'),
+    backupNow: () => ipcRenderer.invoke('storage:backupNow'),
+    stopBackup: () => ipcRenderer.invoke('storage:stopBackup'),
+    open: which => ipcRenderer.invoke('storage:open', which),
+    onChange: cb => ipcRenderer.on('storage:changed', (e, info, msg) => cb(info, msg))
+  }
 });

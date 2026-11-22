@@ -57,7 +57,13 @@ ipcMain.handle('file:save', async (e, filename, data) => {
 });
 ipcMain.handle('folder:open', () => shell.openPath(dataDir()));
 
-const mediaDir = () => path.join(dataDir(), 'media');
+/* ---------- storage settings: where clips live, and the external-drive backup ---------- */
+const cfgFile = () => path.join(dataDir(), 'storage.json');
+let CFG = null;
+function cfg() { if (!CFG) { try { CFG = JSON.parse(fs.readFileSync(cfgFile(), 'utf8')) || {}; } catch (e) { CFG = {}; } } return CFG; }
+function saveCfg() { try { writeAtomic(cfgFile(), JSON.stringify(cfg(), null, 2)); } catch (e) { } }
+const defaultMediaDir = () => path.join(dataDir(), 'media');
+const mediaDir = () => cfg().mediaDir || defaultMediaDir();
 const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp' };
 const safeName = n => { const b = path.basename(String(n || '')); return /^[A-Za-z0-9._-]+$/.test(b) && !b.startsWith('.') ? b : null; };
 function newMediaName(ext) {
@@ -82,15 +88,144 @@ ipcMain.handle('media:add', async (e, src) => {
   throw new Error('Nothing to add');
 });
 ipcMain.handle('media:delete', async (e, files) => {
-  for (const f of Array.isArray(files) ? files : []) { const n = safeName(f); if (n) await fs.promises.rm(path.join(mediaDir(), n), { force: true }).catch(() => { }); }
+  for (const f of Array.isArray(files) ? files : []) { const n = safeName(f); if (n) for (const dir of new Set([mediaDir(), defaultMediaDir()])) await fs.promises.rm(path.join(dir, n), { force: true }).catch(() => { }); }
   return true;
 });
+const sameDir = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+const driveRoot = dir => path.parse(path.resolve(dir)).root;
+const driveThere = dir => { try { return !!dir && fs.existsSync(driveRoot(dir)); } catch (e) { return false; } };
+const listMedia = async dir => { try { return (await fs.promises.readdir(dir)).filter(safeName); } catch (e) { return []; } };
+async function sizeOf(f) { try { return (await fs.promises.stat(f)).size; } catch (e) { return -1; } }
+// copy to a temp name, then rename, so a half-copied file never looks complete
+async function copyIfChanged(src, dst) {
+  const s = await sizeOf(src); if (s < 0) return false;
+  if (await sizeOf(dst) === s) return false;
+  await fs.promises.copyFile(src, dst + '.part'); await fs.promises.rename(dst + '.part', dst);
+  return true;
+}
+const S2 = { busy: '', progress: null, lastError: '', wasThere: false };
+function storageInfo() {
+  const c = cfg();
+  return {
+    mediaDir: mediaDir(), mediaIsDefault: !c.mediaDir,
+    backupDir: c.backupDir || '', backupThere: driveThere(c.backupDir), lastBackup: c.lastBackup || null, lastBackupFiles: c.lastBackupFiles || 0,
+    busy: S2.busy, progress: S2.progress, lastError: S2.lastError
+  };
+}
+function pushStorage(msg) { if (win && !win.isDestroyed()) win.webContents.send('storage:changed', storageInfo(), msg || ''); }
+
+async function moveMediaTo(dest) {
+  const from = mediaDir();
+  if (sameDir(from, dest)) return;
+  await fs.promises.mkdir(dest, { recursive: true });
+  S2.busy = 'moving'; S2.lastError = '';
+  try {
+    let names = await listMedia(from); S2.progress = { done: 0, total: names.length }; pushStorage();
+    for (const n of names) { await copyIfChanged(path.join(from, n), path.join(dest, n)); S2.progress.done++; pushStorage(); }
+    // switch over, then pick up anything added while we were copying
+    cfg().movingFrom = from; cfg().mediaDir = sameDir(dest, defaultMediaDir()) ? undefined : dest; saveCfg();
+    names = await listMedia(from);
+    for (const n of names) await copyIfChanged(path.join(from, n), path.join(dest, n));
+    // remove originals only once the copy is verified
+    for (const n of names) { const a = path.join(from, n); if (await sizeOf(a) === await sizeOf(path.join(dest, n))) await fs.promises.rm(a, { force: true }).catch(() => { }); }
+    await fs.promises.rmdir(from).catch(() => { });
+    delete cfg().movingFrom; saveCfg();
+  } catch (e) { S2.lastError = 'Move stopped: ' + (e && e.message || e); throw e; }
+  finally { S2.busy = ''; S2.progress = null; pushStorage(); }
+}
+
+const stamp = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+async function runBackup(why) {
+  const dir = cfg().backupDir;
+  if (!dir || S2.busy || !driveThere(dir)) return false;
+  S2.busy = 'backup'; S2.lastError = ''; pushStorage();
+  try {
+    await fs.promises.mkdir(path.join(dir, 'media'), { recursive: true });
+    await fs.promises.mkdir(path.join(dir, 'history'), { recursive: true });
+    if (fs.existsSync(dataFile())) {
+      const text = await fs.promises.readFile(dataFile(), 'utf8');
+      writeAtomic(path.join(dir, 'journal.json'), text);
+      writeAtomic(path.join(dir, 'history', `journal-${stamp(new Date())}.json`), text);
+      const hist = (await fs.promises.readdir(path.join(dir, 'history'))).filter(f => /^journal-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+      for (const f of hist.slice(0, Math.max(0, hist.length - 90))) await fs.promises.rm(path.join(dir, 'history', f), { force: true });
+    }
+    for (const f of ['storage.json']) { try { await fs.promises.copyFile(path.join(dataDir(), f), path.join(dir, f)); } catch (e) { } }
+    // clips are added, never removed from the backup, so deleting one in the app can't wipe your only copy
+    const names = await listMedia(mediaDir()); let copied = 0;
+    S2.progress = { done: 0, total: names.length }; pushStorage();
+    for (const n of names) { if (await copyIfChanged(path.join(mediaDir(), n), path.join(dir, 'media', n))) copied++; S2.progress.done++; if (S2.progress.done % 5 === 0) pushStorage(); }
+    cfg().lastBackup = new Date().toISOString(); cfg().lastBackupFiles = names.length; saveCfg();
+    S2.busy = ''; S2.progress = null;
+    pushStorage(why === 'manual' ? 'Backup complete' : `Backed up to ${driveRoot(dir).replace(/\\$/, '')}${copied ? ` (${copied} new clip${copied === 1 ? '' : 's'})` : ''}`);
+    return true;
+  } catch (e) {
+    S2.busy = ''; S2.progress = null; S2.lastError = 'Backup failed: ' + (e && e.message || e); pushStorage(S2.lastError);
+    return false;
+  }
+}
+// Look for the backup drive every 30 s. Back up as soon as it's plugged in, and again every 12 h while it stays connected.
+function watchBackupDrive() {
+  const tick = () => {
+    const dir = cfg().backupDir; const there = driveThere(dir);
+    const age = cfg().lastBackup ? Date.now() - Date.parse(cfg().lastBackup) : Infinity;
+    if (there && (!S2.wasThere || age > 12 * 3600e3)) runBackup('auto');
+    if (there !== S2.wasThere) { S2.wasThere = there; pushStorage(); }
+  };
+  setTimeout(tick, 5000); setInterval(tick, 30000);
+  // gentle nudge when the drive hasn't been seen for a week
+  let nudged = 0;
+  const remind = () => {
+    const c = cfg(); if (!c.backupDir || S2.busy || driveThere(c.backupDir)) return;
+    const since = Date.parse(c.lastBackup || c.backupSince || '') || Date.now();
+    const days = Math.floor((Date.now() - since) / 86400e3);
+    if (days < 7 || Date.now() - nudged < 20 * 3600e3) return;
+    nudged = Date.now();
+    if (win && !win.isDestroyed()) dialog.showMessageBox(win, { type: 'info', message: c.lastBackup ? `Your last backup was ${days} days ago` : `No backup yet`, detail: `Plug in your backup drive (${driveRoot(c.backupDir).replace(/\\$/, '')}) and the journal will back up your trades and clips automatically.` });
+  };
+  setTimeout(remind, 2 * 60e3); setInterval(remind, 3 * 3600e3);
+}
+
+ipcMain.handle('storage:get', () => storageInfo());
+ipcMain.handle('storage:pickMedia', async () => {
+  if (S2.busy) return storageInfo();
+  const r = await dialog.showOpenDialog(win, { title: 'Choose where to keep screenshots and clips', defaultPath: mediaDir(), properties: ['openDirectory', 'createDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return storageInfo();
+  let dest = r.filePaths[0];
+  if (path.basename(dest).toLowerCase() !== 'media' && !/journal/i.test(dest)) dest = path.join(dest, '3 Gates Journal Media');
+  if (cfg().backupDir && driveRoot(dest).toLowerCase() === driveRoot(cfg().backupDir).toLowerCase()) { dialog.showMessageBox(win, { type: 'warning', message: "That's your backup drive", detail: "Keep clips on a drive that's always connected, like D:. The backup drive gets a copy automatically." }); return storageInfo(); }
+  try { await moveMediaTo(dest); pushStorage('Clips folder changed'); } catch (e) { dialog.showMessageBox(win, { type: 'warning', message: "Couldn't move your clips", detail: String(e && e.message || e) + '\n\nNothing was lost. Your clips are still in the old folder.' }); }
+  return storageInfo();
+});
+ipcMain.handle('storage:pickBackup', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose your backup drive or folder', properties: ['openDirectory', 'createDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return storageInfo();
+  let dest = r.filePaths[0];
+  if (!/journal/i.test(dest)) dest = path.join(dest, '3 Gates Journal Backup');
+  if (driveRoot(dest).toLowerCase() === driveRoot(mediaDir()).toLowerCase() || driveRoot(dest).toLowerCase() === driveRoot(dataDir()).toLowerCase()) {
+    const a = await dialog.showMessageBox(win, { type: 'warning', buttons: ['Use it anyway', 'Pick another'], defaultId: 1, cancelId: 1, message: 'That drive already holds your journal', detail: 'A backup on the same drive is lost if that drive fails. An external drive is safer.' });
+    if (a.response !== 0) return storageInfo();
+  }
+  cfg().backupDir = dest; cfg().backupSince = new Date().toISOString(); saveCfg(); S2.wasThere = driveThere(dest);
+  runBackup('manual');
+  return storageInfo();
+});
+ipcMain.handle('storage:backupNow', async () => {
+  if (!cfg().backupDir) return storageInfo();
+  if (!driveThere(cfg().backupDir)) { pushStorage(`Plug in your backup drive (${driveRoot(cfg().backupDir).replace(/\\$/, '')}) first`); return storageInfo(); }
+  await runBackup('manual'); return storageInfo();
+});
+ipcMain.handle('storage:stopBackup', () => { delete cfg().backupDir; delete cfg().backupSince; saveCfg(); pushStorage('Backup turned off. Files already on the drive were left in place.'); return storageInfo(); });
+ipcMain.handle('storage:open', (e, which) => { const d = which === 'backup' ? cfg().backupDir : mediaDir(); if (d && fs.existsSync(d)) shell.openPath(d); });
+
 function serveMedia(req) {
   const u = new URL(req.url);
   const name = safeName(decodeURIComponent(u.pathname.slice(1)));
   if (!name) return new Response('Bad request', { status: 400 });
-  const file = path.join(mediaDir(), name);
-  let st; try { st = fs.statSync(file); } catch (e) { return new Response('Not found', { status: 404 }); }
+  let file = null, st = null;
+  for (const dir of [mediaDir(), defaultMediaDir(), cfg().movingFrom].filter(Boolean)) {
+    try { const f = path.join(dir, name); const s2 = fs.statSync(f); if (s2.isFile()) { file = f; st = s2; break; } } catch (e) { }
+  }
+  if (!file) return new Response('Not found', { status: 404 });
   const type = MIME[path.extname(name).toLowerCase()] || 'application/octet-stream';
   const range = req.headers.get('range');
   const m = range && /bytes=(\d*)-(\d*)/.exec(range);
@@ -163,12 +298,12 @@ function checkNow() {
 }
 
 Menu.setApplicationMenu(Menu.buildFromTemplate([
-  { label: 'File', submenu: [{ label: 'Open data folder', click: () => shell.openPath(dataDir()) }, { type: 'separator' }, { role: 'quit' }] },
+  { label: 'File', submenu: [{ label: 'Open data folder', click: () => shell.openPath(dataDir()) }, { label: 'Open clips folder', click: () => { fs.mkdirSync(mediaDir(), { recursive: true }); shell.openPath(mediaDir()); } }, { label: 'Back up now', click: () => cfg().backupDir ? (driveThere(cfg().backupDir) ? runBackup('manual') : dialog.showMessageBox(win, { message: 'Backup drive not connected', detail: 'Plug in ' + driveRoot(cfg().backupDir) + ' and try again.' })) : dialog.showMessageBox(win, { message: 'No backup drive set', detail: 'Choose one in Settings → Storage & backup.' }) }, { type: 'separator' }, { role: 'quit' }] },
   { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },
-  { label: 'Help', submenu: [{ label: 'Check for updates…', click: checkNow }, { label: 'About', click: () => dialog.showMessageBox(win, { message: '3 Gates Trade Journal', detail: 'Version ' + app.getVersion() + '\nData folder: ' + dataDir() }) }] },
+  { label: 'Help', submenu: [{ label: 'Check for updates…', click: checkNow }, { label: 'About', click: () => dialog.showMessageBox(win, { message: '3 Gates Trade Journal', detail: 'Version ' + app.getVersion() + '\nData folder: ' + dataDir() + '\nClips folder: ' + mediaDir() + (cfg().backupDir ? '\nBackup: ' + cfg().backupDir : '') }) }] },
   { label: 'View', submenu: [{ role: 'reload' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }, { role: 'toggleDevTools' }] }
 ]));
 
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
-app.whenReady().then(() => { protocol.handle('journal-media', serveMedia); createWindow(); setupUpdates(); });
+app.whenReady().then(() => { protocol.handle('journal-media', serveMedia); createWindow(); setupUpdates(); watchBackupDrive(); });
 app.on('window-all-closed', () => app.quit());

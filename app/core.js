@@ -80,6 +80,7 @@ function mergeDefaults(s) {
   const o = Object.assign({}, d, s || {});
   if (!Array.isArray(o.missReasons)) o.missReasons = DEFAULT_MISS_REASONS.slice();
   if (typeof mergePlaybook === 'function') o.playbook = mergePlaybook(o.playbook);
+  if (typeof mergePsy === 'function') o.psy = mergePsy(o.psy);
   for (const k of ['accounts', 'instruments', 'setups', 'stats']) if (!Array.isArray(o[k])) o[k] = d[k];
   o.comments = Object.assign({}, d.comments, o.comments || {});
   for (const c of CATS) if (!Array.isArray(o.comments[c])) o.comments[c] = [];

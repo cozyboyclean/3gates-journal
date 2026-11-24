@@ -529,6 +529,7 @@ VIEWS.diary = {
       <div class="panel" style="padding:10px"><div class="row" style="padding:4px 4px 10px"><input class="inp" type="date" id="jd-pick" value="${date}" style="flex:1"></div>
         <div class="jlist">${keys.slice(0, 120).map(k => { const dts = scoped({ noRange: true }).filter(t => t._.date === k && t._.closed); const p = sum(dts.map(t => t._.pnl)); const has = S.journal[k] && (S.journal[k].plan || S.journal[k].review || S.journal[k].right || S.journal[k].better); return `<button class="jitem ${k === date ? 'on' : ''}" data-jd="${k}"><span>${fmtDay(k)}<br><small>${has ? 'Journal written' : 'No entry'}${dts.length ? ' · ' + dts.length + ' trades' : ''}</small></span><b class="num ${cls(p)}" style="font-size:12.5px">${dts.length ? fmtS$(p) : ''}</b></button>`; }).join('')}</div></div>
       <div class="stack" style="gap:16px">
+        ${typeof psyDiaryBanner === 'function' ? psyDiaryBanner(date) : ''}
         <div class="panel stack">
           <div class="row between"><h2 style="margin:0">${fmtDay(date)}, ${date.slice(0, 4)}</h2><span class="hint" id="jsaved">${S.journal[date] ? 'Saved' : 'Not written yet'}</span></div>
           <div class="fgrid" style="grid-template-columns:repeat(3,minmax(0,1fr))">

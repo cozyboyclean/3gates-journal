@@ -52,6 +52,7 @@ function drawForm() {
         ${inp('stop', 'Initial stop')}${inp('target', 'Planned target')}${inp('mfe', 'Best price reached (MFE)')}${inp('mae', 'Worst price reached (MAE)')}
       </div>
       ${pbFormSection()}
+      ${typeof psyFormSection === 'function' ? psyFormSection() : ''}
       <div class="sec-t">Entries</div>
       <div class="stack" style="gap:8px" id="entries">${F.entries.map((e, i) => `<div class="exitrow">
         <div class="f"><label for="en-${i}-price">Entry price</label><input class="inp num" id="en-${i}-price" type="number" step="any" data-en="${i}:price" value="${esc(e.price ?? '')}"></div>
@@ -200,6 +201,7 @@ function openDetail(id) {
       ${(t.entries || []).length > 1 ? `<div><span class="lbl">Entries</span><table style="margin-top:4px"><tbody>${t.entries.map(e => `<tr><td class="num">${e.price}</td><td class="num">${e.size} ct</td><td class="muted">${fmtDate(e.time, true)}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${(t.exits || []).length > 1 ? `<div><span class="lbl">Exits</span><table style="margin-top:4px"><tbody>${t.exits.map(e => `<tr><td class="num">${e.price}</td><td class="num">${e.size} ct</td><td class="muted">${fmtDate(e.time, true)}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${bookOf(t) === 'missed' ? `<div><span class="lbl">Why it was missed</span><div class="chips" style="margin-top:4px"><span class="chip on cn">${esc(t.missReason || 'No reason given')}</span></div></div>` : ''}
+      ${typeof psyDrawer === 'function' ? psyDrawer(t) : ''}
       ${statsH}${cm}
       ${t.notes ? `<div><span class="lbl">Notes</span><div class="note" style="margin-top:4px">${esc(t.notes)}</div></div>` : ''}
       ${(t.shots || []).length ? `<div><span class="lbl">Screenshots & clips</span><div class="shots" style="margin-top:6px">${t.shots.map((sh, i) => mediaThumb(sh, i, false)).join('')}</div></div>` : ''}

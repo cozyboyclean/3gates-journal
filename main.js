@@ -64,7 +64,7 @@ function cfg() { if (!CFG) { try { CFG = JSON.parse(fs.readFileSync(cfgFile(), '
 function saveCfg() { try { writeAtomic(cfgFile(), JSON.stringify(cfg(), null, 2)); } catch (e) { } }
 const defaultMediaDir = () => path.join(dataDir(), 'media');
 const mediaDir = () => cfg().mediaDir || defaultMediaDir();
-const MIME = { '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp' };
+const MIME = { '.ts': 'video/mp2t', '.avi': 'video/x-msvideo', '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp' };
 const safeName = n => { const b = path.basename(String(n || '')); return /^[A-Za-z0-9._-]+$/.test(b) && !b.startsWith('.') ? b : null; };
 function newMediaName(ext) {
   ext = String(ext || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'bin';
@@ -219,11 +219,17 @@ ipcMain.handle('storage:open', (e, which) => { const d = which === 'backup' ? cf
 
 function serveMedia(req) {
   const u = new URL(req.url);
-  const name = safeName(decodeURIComponent(u.pathname.slice(1)));
-  if (!name) return new Response('Bad request', { status: 400 });
-  let file = null, st = null;
-  for (const dir of [mediaDir(), defaultMediaDir(), cfg().movingFrom].filter(Boolean)) {
-    try { const f = path.join(dir, name); const s2 = fs.statSync(f); if (s2.isFile()) { file = f; st = s2; break; } } catch (e) { }
+  let file = null, st = null, name = '';
+  if (u.hostname === 'src') {
+    // a recording opened in the clip cutter: served from where it is, never copied
+    const p = SOURCES.get(decodeURIComponent(u.pathname.slice(1)));
+    if (p) { try { st = fs.statSync(p); file = p; name = p; } catch (e) { } }
+  } else {
+    name = safeName(decodeURIComponent(u.pathname.slice(1)));
+    if (!name) return new Response('Bad request', { status: 400 });
+    for (const dir of [mediaDir(), defaultMediaDir(), cfg().movingFrom].filter(Boolean)) {
+      try { const f = path.join(dir, name); const s2 = fs.statSync(f); if (s2.isFile()) { file = f; st = s2; break; } } catch (e) { }
+    }
   }
   if (!file) return new Response('Not found', { status: 404 });
   const type = MIME[path.extname(name).toLowerCase()] || 'application/octet-stream';
@@ -237,6 +243,57 @@ function serveMedia(req) {
   }
   return new Response(Readable.toWeb(fs.createReadStream(file)), { status: 200, headers: { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Content-Length': String(st.size) } });
 }
+
+/* ---------- clip cutter: cut sections out of a recording with the bundled ffmpeg ---------- */
+const { spawn } = require('child_process');
+let ffmpegPath = null;
+try { ffmpegPath = require('ffmpeg-static'); if (ffmpegPath) ffmpegPath = ffmpegPath.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep); } catch (e) { }
+const SOURCES = new Map(); const TEMPS = [];
+const addSource = p => { const t = crypto.randomBytes(8).toString('hex'); SOURCES.set(t, p); return t; };
+async function srcInfo(p) { const st = await fs.promises.stat(p); if (!st.isFile()) throw new Error('Not a file'); return { token: addSource(p), name: path.basename(p), size: st.size }; }
+function resolveSrc(o) {
+  if (o.token && SOURCES.has(o.token)) return SOURCES.get(o.token);
+  const n = safeName(o.file); if (n) for (const dir of [mediaDir(), defaultMediaDir()]) { const f = path.join(dir, n); if (fs.existsSync(f)) return f; }
+  throw new Error('Source video not found');
+}
+function runFfmpeg(args, dur, onPct) {
+  return new Promise((res, rej) => {
+    if (!ffmpegPath || !fs.existsSync(ffmpegPath)) return rej(new Error('The video cutter is missing from this install. Reinstall the latest version.'));
+    const p = spawn(ffmpegPath, args, { windowsHide: true }); let err = '';
+    p.stderr.on('data', d => { const s = d.toString(); err = (err + s).slice(-4000); const m = /time=(\d+):(\d+):([\d.]+)/.exec(s); if (m && dur && onPct) onPct(Math.min(1, (+m[1] * 3600 + +m[2] * 60 + +m[3]) / dur)); });
+    p.on('error', rej);
+    p.on('close', c => c === 0 ? res() : rej(new Error('Cutting failed: ' + err.split(/\r?\n/).filter(Boolean).slice(-1)[0])));
+  });
+}
+ipcMain.handle('clip:available', () => !!ffmpegPath && fs.existsSync(ffmpegPath));
+ipcMain.handle('clip:pick', async () => {
+  const r = await dialog.showOpenDialog(win, { title: 'Choose a recording', properties: ['openFile'], filters: [{ name: 'Videos', extensions: ['mp4', 'mkv', 'mov', 'm4v', 'webm', 'avi', 'ts', 'flv'] }, { name: 'All files', extensions: ['*'] }] });
+  return r.canceled || !r.filePaths[0] ? null : srcInfo(r.filePaths[0]);
+});
+ipcMain.handle('clip:open', (e, p) => srcInfo(String(p || '')));
+// Re-encodes the section so the cut lands on the exact frame (a plain copy can only cut at keyframes).
+ipcMain.handle('clip:cut', async (e, o) => {
+  o = o || {}; const src = resolveSrc(o);
+  const start = Math.max(0, Number(o.start) || 0), end = Number(o.end);
+  if (!(end > start)) throw new Error('Set the end after the start');
+  const dur = end - start;
+  await fs.promises.mkdir(mediaDir(), { recursive: true });
+  const name = newMediaName('mp4'); const out = path.join(mediaDir(), name); const tmp = path.join(mediaDir(), '.part-' + name);
+  const send = pct => { if (!e.sender.isDestroyed()) e.sender.send('clip:progress', o.job, pct); };
+  try {
+    await runFfmpeg(['-hide_banner', '-y', '-ss', start.toFixed(3), '-i', src, '-t', dur.toFixed(3), '-map', '0:v:0', '-map', '0:a:0?', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', '-f', 'mp4', tmp], dur, send);
+    await fs.promises.rename(tmp, out);
+  } catch (err) { await fs.promises.rm(tmp, { force: true }).catch(() => { }); throw err; }
+  return { file: name, size: (await fs.promises.stat(out)).size };
+});
+// Some recordings (e.g. OBS .mkv) won't play in the preview; a quick lossless repackage to .mp4 fixes that.
+ipcMain.handle('clip:remux', async (e, o) => {
+  const src = resolveSrc(o || {});
+  const out = path.join(app.getPath('temp'), '3gj-preview-' + crypto.randomBytes(5).toString('hex') + '.mp4'); TEMPS.push(out);
+  await runFfmpeg(['-hide_banner', '-y', '-i', src, '-map', '0:v:0', '-map', '0:a:0?', '-c', 'copy', '-movflags', '+faststart', out], 0);
+  return { token: addSource(out) };
+});
+app.on('will-quit', () => { for (const f of TEMPS) { try { fs.rmSync(f, { force: true }); } catch (e) { } } });
 
 function loadState() { try { return JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch (e) { return { width: 1440, height: 900 }; } }
 function saveState() {

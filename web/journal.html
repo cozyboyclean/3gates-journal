@@ -262,6 +262,20 @@ table.pairs input{width:16px;height:16px;accent-color:var(--accent)}
   .day{min-height:58px;padding:4px}.day .p{font-size:11px}.day .c{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+/* clip cutter */
+.shot .shot-tools{position:absolute;top:5px;right:5px;display:flex;gap:4px}
+button.drop{background:none;font:inherit;color:var(--muted)}
+.clipper{position:fixed;inset:0;z-index:95;background:rgba(5,8,14,.8);display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;padding:20px 12px}
+.cl-wrap{background:var(--panel);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow);width:min(1280px,100%)}
+.cl-body{padding:14px 18px 18px;display:flex;flex-direction:column;gap:12px}
+.cl-stage{position:relative;background:#000;border-radius:8px;overflow:hidden;display:grid;place-items:center}
+.cl-stage video{width:100%;max-height:62vh;display:block}
+.cl-msg{position:absolute;inset:auto 0 0 0;padding:10px 14px;background:rgba(0,0,0,.75);color:#fff;font-size:13px}
+.cl-bar{position:relative;height:34px;border-radius:6px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;touch-action:none}
+.cl-sel{position:absolute;top:0;bottom:0;background:var(--accent-soft);border-left:2px solid var(--accent);border-right:2px solid var(--accent)}
+.cl-sel.bad{background:var(--neg-soft);border-color:var(--neg)}
+.cl-done{position:absolute;bottom:0;height:6px;background:var(--pos);border-radius:2px}
+.cl-head{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px;background:var(--fg);pointer-events:none}
 /* psychology module */
 .warn{color:var(--warn)}
 .lvl{display:flex;flex-direction:column;gap:2px;padding:10px 14px;border-radius:10px;border:1px solid;font-size:13px}
@@ -302,4 +316,5 @@ table.pairs input{width:16px;height:16px;accent-color:var(--accent)}
 <script src="views.js"></script>
 <script src="playbook.js"></script>
 <script src="psych.js"></script>
+<script src="clipper.js"></script>
 <script src="forms.js"></script>

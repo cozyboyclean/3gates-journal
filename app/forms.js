@@ -14,7 +14,7 @@ function mediaThumb(sh, i, editable) {
   const inner = v
     ? `<video src="${src}#t=0.1" preload="metadata" muted playsinline></video><span class="playbadge" aria-hidden="true">▶</span>`
     : `<img src="${src}" alt="Screenshot ${i + 1}">`;
-  const box = `<div class="shot ${v ? 'vid' : ''}"><button class="shot-open" data-zoom="${src}" data-kind="${v ? 'video' : 'image'}" data-cap="${esc(sh.note || '')}" aria-label="Open ${v ? 'clip' : 'screenshot'} ${i + 1}">${inner}</button>${sh.name ? `<span class="shot-name">${esc(sh.name)}</span>` : ''}${editable ? `<button class="btn sm shot-rm" data-delshot="${i}">Remove</button>` : ''}</div>`;
+  const box = `<div class="shot ${v ? 'vid' : ''}"><button class="shot-open" data-zoom="${src}" data-kind="${v ? 'video' : 'image'}" data-cap="${esc(sh.note || '')}" aria-label="Open ${v ? 'clip' : 'screenshot'} ${i + 1}">${inner}</button>${sh.name ? `<span class="shot-name">${esc(sh.name)}</span>` : ''}${editable ? `<span class="shot-tools">${v && sh.file && typeof CLIP_OK !== 'undefined' && CLIP_OK ? `<button class="btn sm" data-trimshot="${i}">Trim</button>` : ''}<button class="btn sm" data-delshot="${i}">Remove</button></span>` : ''}</div>`;
   const cap = editable
     ? `<textarea class="inp shot-note" data-shotnote="${i}" rows="2" placeholder="Note on this ${v ? 'clip' : 'screenshot'}…" aria-label="Note for ${v ? 'clip' : 'screenshot'} ${i + 1}">${esc(sh.note || '')}</textarea>`
     : (sh.note ? `<div class="shot-cap">${esc(sh.note)}</div>` : '');
@@ -74,7 +74,8 @@ function drawForm() {
       <div class="sec-t">Notes, screenshots & clips</div>
       <textarea class="inp" data-f="notes" placeholder="What did you see? Why did you take it? What would you do differently?">${esc(F.notes || '')}</textarea>
       <div class="shots" id="shots">${F.shots.map((sh, i) => mediaThumb(sh, i, true)).join('')}
-        <label class="drop" for="shot-in" id="dropzone"><span><b>Add screenshots or clips</b><br>Click, drag files here, or paste a screenshot</span><input type="file" id="shot-in" accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.mkv" multiple hidden></label></div>
+        <label class="drop" for="shot-in" id="dropzone"><span><b>Add screenshots or clips</b><br>Click, drag files here, or paste a screenshot${typeof CLIP_OK !== 'undefined' && CLIP_OK ? '<br><span class="faint">Drop a session recording to cut clips from it</span>' : ''}</span><input type="file" id="shot-in" accept="image/*,video/*,.mp4,.mov,.webm,.m4v,.mkv" multiple hidden></label>
+        ${typeof CLIP_OK !== 'undefined' && CLIP_OK ? `<button class="drop" type="button" data-act="clip-pick"><span><b>✂ Cut clips from a recording</b><br>Open a video, mark start and end, add the clip</span></button>` : ''}</div>
       <div class="hint" id="shot-status"></div>
     </div>
     <div class="mfoot"><span class="hint" id="ferr"></span><div class="row"><button class="btn" data-act="close">Cancel</button><button class="btn pri" data-act="save-trade">${isNew ? 'Save trade' : 'Save changes'}</button></div></div>
@@ -137,6 +138,12 @@ function saveForm() {
 const VID_EXT = /\.(mp4|m4v|mov|webm|mkv)$/i;
 async function addShots(files) {
   const status = $('#shot-status');
+  // a single video on the desktop app opens the clip cutter instead of copying the whole recording
+  const vids = files.filter(f => f.type.startsWith('video/') || VID_EXT.test(f.name || ''));
+  if (typeof CLIP_OK !== 'undefined' && CLIP_OK && vids.length === 1 && DESK.pathFor && DESK.pathFor(vids[0])) {
+    const p = DESK.pathFor(vids[0]); files = files.filter(f => f !== vids[0]);
+    try { const s = await DESK.clip.open(p); setTimeout(() => openClipper(s, { wholeFile: true, path: p }), 0); } catch (e) { toast('Could not open the video: ' + (e.message || e)); }
+  }
   for (const file of files) {
     const video = file.type.startsWith('video/') || VID_EXT.test(file.name || '');
     if (!video && !file.type.startsWith('image/')) { toast(`${file.name} isn't an image or video`); continue; }

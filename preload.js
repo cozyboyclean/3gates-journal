@@ -9,6 +9,14 @@ contextBridge.exposeInMainWorld('desktop', {
   pathFor: file => { try { return webUtils.getPathForFile(file) || ''; } catch (e) { return ''; } },
   addMedia: src => ipcRenderer.invoke('media:add', src),
   deleteMedia: files => ipcRenderer.invoke('media:delete', files),
+  clip: {
+    available: () => ipcRenderer.invoke('clip:available'),
+    pick: () => ipcRenderer.invoke('clip:pick'),
+    open: p => ipcRenderer.invoke('clip:open', p),
+    cut: o => ipcRenderer.invoke('clip:cut', o),
+    remux: o => ipcRenderer.invoke('clip:remux', o),
+    onProgress: cb => ipcRenderer.on('clip:progress', (e, job, pct) => cb(job, pct))
+  },
   storage: {
     get: () => ipcRenderer.invoke('storage:get'),
     pickMedia: () => ipcRenderer.invoke('storage:pickMedia'),

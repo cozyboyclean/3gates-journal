@@ -1,8 +1,6 @@
-- New Performance section with four screens: Today, Live session, Mind dashboard and Mental playbook.
-- Today walks you through the session: a 3-minute readiness check (Green / Yellow / Red, with a max-trades suggestion), a 1-minute mental rehearsal, one-tap live tags with a 15-second reset, your trades for the day, and a short debrief that maps each slip-up to its root pattern.
-- Every session gets a 0–100 process score built from what you did, never from P&L. A broken risk rule caps the day at 49 and trading while Red caps it at 59, so a clean losing day always beats a sloppy winning day.
-- A circuit breaker moves Green → Yellow → Red as urges, losses or rule breaks pile up, and tells you what's allowed at each level. Your daily loss limit always ends the session.
-- New Psychology block in the trade form: why you entered, planned or reactive, hesitation, rationalized after the fact, and systematic or emotional exit.
-- Mind dashboard: score trend, process vs outcome, triggers you resisted vs acted on, valid vs invalid winners and losers, and a weekly review that picks one bottleneck and one target.
-- Mental playbook: your five root patterns (editable), the 30-session development program, your operating code and the rules the score uses (max trades, daily loss, risk per trade, cooldown).
-- Nothing existing was removed, and your journal file loads as before.
+- New clip cutter, so you no longer need CapCut. In the trade form, click "Cut clips from a recording" (or drop a session recording onto the form). Scrub to the setup, press I for the start and O for the end, then Enter. The clip is cut exactly and attached to the trade.
+- Cut as many clips as you want from one recording. The full recording is never copied into the journal; only the clips are saved, to your clips folder on D:.
+- Every attached video now has a Trim button for tightening the start or end.
+- Shortcuts: Space play/pause, ← → jump 1s (Shift for 5s), , and . step one frame, P previews the selection. Playback speeds go up to 8× for skimming a long session.
+- OBS .mkv recordings work too. The first time, the journal prepares them for preview with no quality loss.
+- This update is larger than usual because the video cutter is built into the app.

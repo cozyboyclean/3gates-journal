@@ -62,7 +62,6 @@ function defaultSettings() {
       { id: 'mist', name: 'Mistakes', values: ['None', 'Early exit', 'Moved stop', 'Chased entry', 'Entered early', 'Revenge trade', 'Oversized', 'Outside plan'] },
       { id: 'emo', name: 'Emotional state', values: ['Calm', 'Confident', 'Hesitant', 'Anxious', 'Frustrated', 'FOMO'] },
       { id: 'val', name: 'Value relationship', values: ['Overlapping', 'Partial overlap', 'Separated above', 'Separated below'] },
-      { id: 'day', name: 'Day type', values: ['Trend', 'Balance', 'Double distribution', 'Neutral'] },
       { id: 'agg', name: 'Gate 3 confirmation', values: ['Big trades', 'Delta', 'Tape speed', 'Footprint'] },
       { id: 'qual', name: 'Setup quality', values: ['A+', 'A', 'B', 'C'] }
     ],
@@ -82,6 +81,9 @@ function mergeDefaults(s) {
   if (typeof mergePlaybook === 'function') o.playbook = mergePlaybook(o.playbook);
   if (typeof mergePsy === 'function') o.psy = mergePsy(o.psy);
   for (const k of ['accounts', 'instruments', 'setups', 'stats']) if (!Array.isArray(o[k])) o[k] = d[k];
+  // Day type tag retired (Gate 1 market state covers the entry read). Values already on trades stay in the data, just hidden.
+  o.migr = Object.assign({}, o.migr);
+  if (!o.migr.noDayType) { o.stats = o.stats.filter(st => st.id !== 'day'); o.migr.noDayType = 1; }
   o.comments = Object.assign({}, d.comments, o.comments || {});
   for (const c of CATS) if (!Array.isArray(o.comments[c])) o.comments[c] = [];
   if (!o.accounts.length) o.accounts = d.accounts;
@@ -299,7 +301,6 @@ function genDemo(o) {
           stats: {
             mist, emo: [win ? pick(['Calm', 'Confident', 'Calm']) : pick(['Calm', 'Anxious', 'Hesitant', 'Frustrated'])],
             val: [m1 ? pick(['Separated above', 'Separated below', 'Partial overlap']) : pick(['Overlapping', 'Partial overlap'])],
-            day: [m1 ? pick(['Trend', 'Double distribution', 'Neutral']) : pick(['Balance', 'Neutral'])],
             agg: [pick(['Big trades', 'Delta', 'Tape speed', 'Footprint'])], qual: [quality]
           },
           comments: o.kind ? { pre: [], entry: [], mgmt: [], exit: [] } : cm, notes: '', shots: []

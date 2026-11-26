@@ -1,8 +1,2 @@
-- New Performance section with four screens: Today, Live session, Mind dashboard and Mental playbook.
-- Today walks you through the session: a 3-minute readiness check (Green / Yellow / Red, with a max-trades suggestion), a 1-minute mental rehearsal, one-tap live tags with a 15-second reset, your trades for the day, and a short debrief that maps each slip-up to its root pattern.
-- Every session gets a 0–100 process score built from what you did, never from P&L. A broken risk rule caps the day at 49 and trading while Red caps it at 59, so a clean losing day always beats a sloppy winning day.
-- A circuit breaker moves Green → Yellow → Red as urges, losses or rule breaks pile up, and tells you what's allowed at each level. Your daily loss limit always ends the session.
-- New Psychology block in the trade form: why you entered, planned or reactive, hesitation, rationalized after the fact, and systematic or emotional exit.
-- Mind dashboard: score trend, process vs outcome, triggers you resisted vs acted on, valid vs invalid winners and losers, and a weekly review that picks one bottleneck and one target.
-- Mental playbook: your five root patterns (editable), the 30-session development program, your operating code and the rules the score uses (max trades, daily loss, risk per trade, cooldown).
-- Nothing existing was removed, and your journal file loads as before.
+- Removed the Day type tag from trades. Your Gate 1 market state already records what you read at entry, and day type can only really be judged after the close.
+- Day types already logged on old trades are kept in your file; they're just hidden. Nothing else changed.
